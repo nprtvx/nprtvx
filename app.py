@@ -58,3 +58,7 @@ popeye = f"""
 @app.route('/bring-it-on')
 def bringiton():
   return popeye
+
+@app.route('string-test')
+def stringtest():
+  return f"""ello {'mastaru'.upper()}! em chesthunnaru?"""
