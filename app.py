@@ -55,6 +55,6 @@ popeye = f"""
     </script>
   """
 
-@app.route('/popeye')
-def index():
+@app.route('/bring-it-on')
+def bringiton():
   return popeye
