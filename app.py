@@ -2,6 +2,13 @@ from flask import Flask
 
 app = Flask(__name__)
 
+default_style = f"""
+* {{
+margin: 0;
+padding: 0;
+box-sizing: border-box;
+}}
+"""
 
 home = f"""
 <div class='home' id='home'>
@@ -9,11 +16,7 @@ home = f"""
 <p>welcome</p>
 </div>
 <style>
-* {{
-margin: 0;
-padding: 0;
-box-sizing: border-box;
-}}
+{default_style}
 .home {{
 position: absolute;
 top: 0;
@@ -42,18 +45,18 @@ def index():
   return home
 
 popeye = f"""
-    <div class='popeye' id='popeye'></div>
-    <style>
-      .popeye {{
-        background-color: #8926;
-        padding: 2rem;
-      }}
-    </style>
-    <script>
-      const popeye = document.getElemenetById('popeye');
-      document.append(popeye*8)
-    </script>
-  """
+<div class='popeye' id='popeye'></div>
+<style>
+.popeye {{
+background-color: #8926;
+padding: 2rem;
+}}
+</style>
+<script>
+const popeye = document.getElemenetById('popeye');
+document.append(popeye*8)
+</script>
+"""
 
 @app.route('/bring-it-on')
 def bringiton():
