@@ -69,4 +69,5 @@ import requests
 
 @app.route('/ello/<name>', methods=['get', 'post'])
 def ello(name):
-  return requests.post('/ello/greeting', data={'text': 'hello world'})
+  response = requests.post('/ello/greeting', data={'text': 'hello world'})
+  return response.text
