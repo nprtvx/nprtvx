@@ -54,7 +54,8 @@ background-color: #8926;
 <script>
 const popeye = document.getElemenetById('popeye');
 popeye.textContent = '🦍';
-document.append(popeye*8)
+popeye.innerHTML = popeye.textContent;
+document.body.append(popeye*8);
 </script>
 """
 
