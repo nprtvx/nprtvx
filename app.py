@@ -53,9 +53,6 @@ background-color: #8926;
 </style>
 <script>
 const popeye = document.getElemenetById('popeye');
-popeye.textContent = '🦍';
-popeye.innerHTML = popeye.textContent;
-document.body.append(popeye*8);
 </script>
 """
 
@@ -66,3 +63,8 @@ def bringiton():
 @app.route('/string-test')
 def stringtest():
   return f"""ello {'mastaru'.upper()}! em chesthunnaru?"""
+
+
+import requests
+response = requests.post('/ello/greeting', data={'text': 'hello world'})
+print(response)
