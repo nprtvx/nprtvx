@@ -49,11 +49,11 @@ popeye = f"""
 <style>
 .popeye {{
 background-color: #8926;
-padding: 2rem;
 }}
 </style>
 <script>
 const popeye = document.getElemenetById('popeye');
+popeye.textContent = '🦍';
 document.append(popeye*8)
 </script>
 """
