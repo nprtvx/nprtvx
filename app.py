@@ -53,3 +53,7 @@ font-family: system-ui;
 @app.errorhandler(404)
 def error404():
   return four04
+
+@app.errorhandler(502)
+def error502():
+  return f"""<div id='error-502'>502</div><style>#error-502{{font-size: 72px;color: #892C;}}</style>"""
