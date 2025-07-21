@@ -67,7 +67,7 @@ def stringtest():
 
 import requests
 
-@app.route('/ello/<name>', methods=['get', 'post'])
+@app.route('/ello')
 def ello(name):
-  response = requests.post('/ello/greeting', data={'text': 'hello world'})
+  response = requests.post('/ello/', data={'text': 'hello world'})
   return response.text
