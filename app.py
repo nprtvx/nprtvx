@@ -100,4 +100,4 @@ font-family: system-ui;
 
 @app.errorhandler(404)
 def error404():
-  reutrn four04
+  return four04
