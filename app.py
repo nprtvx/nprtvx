@@ -13,7 +13,6 @@ box-sizing: border-box;
 home = f"""
 <div class='home' id='home'>
 <h1>nprtvx</h1>
-<p>welcome</p>
 </div>
 <style>
 {default_style}
@@ -28,6 +27,9 @@ display: flex;
 align-items: center;
 justify-content: center;
 flex-direction: column;
+background-image: url("https://images.pexels.com/photos/3311574/pexels-photo-3311574.jpeg?auto=compress&cs=tinysrgb&w=1260&h=750&dpr=1");
+background-size: cover;
+background-position: center;
 }}
 .home h1 {{
 font-size: 48px;
