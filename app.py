@@ -71,3 +71,33 @@ import requests
 def ello(name):
   response = requests.post('/ello/', data={'text': 'hello world'})
   return response.text
+
+four04 = f"""
+<div id='elem-404'>
+<h1>404</h1>
+<p></p>
+</div>
+<script>
+const elem404 = document.getElementById('error-404');
+elem404.classList.add('error-404');
+</script>
+<style>
+body {{
+display: flex;
+align-items: center;
+justify-content: center;
+flex-direction: column;
+}}
+.error-404 {{
+width: 80%;
+}}
+.error-404 h1 {{
+font-size: 48px;
+font-family: system-ui;
+}}
+</style>
+"""
+
+@app.errorhandler(404)
+def error404():
+  reutrn four04
