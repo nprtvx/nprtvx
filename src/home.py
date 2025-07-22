@@ -2,7 +2,7 @@
 
 
 style = f"""
-body {{
+html, body {{
 background-image: linear-gradient(#000d, #000d);
 }}
 .home {{
