@@ -2,6 +2,9 @@
 
 
 style = f"""
+body {{
+background-image: linear-gradient(#000d, #000d);
+}}
 .home {{
 position: absolute;
 top: 0;
