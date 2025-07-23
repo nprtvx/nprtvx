@@ -11,7 +11,7 @@ top: 0;
 bottom: 0;
 right: 0;
 left: 0;
-box-shadow: 0 0 0 100% #8926 inset;
+box-shadow: 0 0 0 12rem #8926 inset;
 display: flex;
 align-items: center;
 justify-content: center;
@@ -24,7 +24,7 @@ background-position: center;
 .home h1 {{
 position: absolute;
 top: 26px;
-right: 26px;
+right: 126px;
 font-size: 72px;
 color: #892C;
 text-align: center;
