@@ -29,18 +29,22 @@ background-position: center;
 }}
 
 .home h1 {{
-position: absolute;
-top: 26px;
-right: 126px;
-font-size: 72px;
+font-size: 4rem;
 color: #9008;
 text-align: center;
+text-transform: uppercase;
+font-weight: 400;
+font-family: system-ui, Arial, sans-serif;
 }}
 """
 
 script = f"""
 const home = document.getElementById('home');
 home.classList.add('home');
+const aBtn2shoot = document.createElement('div');
+btn2shoot.setAttribute('id', 'btn2shoot');
+btn2shoot.classList.add('btn2shoot');
+
 """
 
 home = f"""
