@@ -29,11 +29,12 @@ background-position: center;
 }}
 
 .home h1 {{
-font-size: 4rem;
+font-size: 8rem;
 color: #9008;
 text-align: center;
 text-transform: uppercase;
 font-weight: 400;
+border: 4px solid #9008;
 font-family: system-ui, Arial, sans-serif;
 }}
 """
