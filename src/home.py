@@ -34,7 +34,7 @@ color: #9008;
 text-align: center;
 text-transform: uppercase;
 font-weight: 400;
-border: 4px solid #9008;
+border: 8px 16px solid #9008;
 font-family: system-ui, Arial, sans-serif;
 }}
 """
