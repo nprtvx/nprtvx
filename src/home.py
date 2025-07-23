@@ -37,6 +37,21 @@ font-weight: 400;
 border: 8px solid #9008;
 font-family: system-ui, Arial, sans-serif;
 }}
+
+.btn2shoot {{
+position: absolute;
+bottom: 1rem;
+right: 1rem;
+background: linear-gradient(#000d, #000d);
+border-radius: 50%;
+border: 1px solid;
+width: 100px;
+height: 100px;
+}}
+
+.btn2shoot:hover {{
+border: 4px solid;
+}}
 """
 
 script = f"""
@@ -45,7 +60,14 @@ home.classList.add('home');
 const aBtn2shoot = document.createElement('div');
 btn2shoot.setAttribute('id', 'btn2shoot');
 btn2shoot.classList.add('btn2shoot');
-
+function startbubbles() {{
+const bubble = document.createElement('span');
+bubble.classList.add('bubble');
+bubble.setAttribute('id', 'bubble');
+}}
+btn2shoot.addEventListener('click', () => {{
+startbubbles();
+}});
 """
 
 home = f"""
