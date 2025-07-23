@@ -11,7 +11,7 @@ top: 0;
 bottom: 0;
 right: 0;
 left: 0;
-box-shadow: 0 0 0 12rem #8926 inset;
+box-shadow: 0 0 0 100vmin #8926 inset;
 display: flex;
 align-items: center;
 justify-content: center;
