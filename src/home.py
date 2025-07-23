@@ -2,16 +2,23 @@
 
 
 style = f"""
-html, body {{
-background-image: linear-gradient(#000d, #000d);
+* {{
+margin: 0;
+padding: 0;
+box-sizing: border-box;
 }}
+
+html, body {{
+background-color: #000d;
+}}
+
 .home {{
 position: absolute;
 top: 0;
 bottom: 0;
 right: 0;
 left: 0;
-box-shadow: 0 0 0 100vmin #8926 inset;
+box-shadow: 0 0 0 25rem #8926 inset;
 display: flex;
 align-items: center;
 justify-content: center;
@@ -26,7 +33,7 @@ position: absolute;
 top: 26px;
 right: 126px;
 font-size: 72px;
-color: #892C;
+color: #9008;
 text-align: center;
 }}
 """
