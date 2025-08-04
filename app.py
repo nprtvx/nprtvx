@@ -1,9 +1,3 @@
-from flask import Flask
-import requests
-from src.home import home
-from src.popeye import popeye
-from src.account.users import username
-
 from fastapi import FastAPI
 from flask import Flask
 from werkzeug.middleware.dispatcher import DispatcherMiddleware
