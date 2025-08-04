@@ -20,7 +20,23 @@ def stringtest():
 
 @app.route('/ello')
 def ello(name):
-  response = requests.post('/ello/', json={'text': 'hello world'})
+  url = "https://nortvx.onrender.com/ello"
+  data = {"text": "ello world"}
+  
+  try:
+    response = requests.post(url, data=data, timeout=10)
+    response.raise_for_status()  # Raises HTTPError if the response was an HTTP error
+  except requests.exceptions.HTTPError as errh:
+    print("HTTP Error:", errh)
+  except requests.exceptions.ConnectionError as errc:
+    print("Error Connecting:", errc)
+  except requests.exceptions.Timeout as errt:
+    print("Timeout Error:", errt)
+  except requests.exceptions.RequestException as err:
+    print("Oops: Something Else", err)
+  else:
+    print("Request succeeded:", response.json())
+  
   return response.text
 
 four04 = f"""
