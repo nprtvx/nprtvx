@@ -1,6 +1,8 @@
 from flask import Flask
+import requests
 from src.home import home
 from src.popeye import popeye
+from src.account.users import username
 
 app = Flask(__name__)
 
@@ -16,12 +18,9 @@ def bringiton():
 def stringtest():
   return f"""ello {'mastaru'.upper()}! em chesthunnaru?"""
 
-
-import requests
-
 @app.route('/ello')
 def ello(name):
-  response = requests.post('/ello/', data={'text': 'hello world'})
+  response = requests.post('/ello/', json={'text': 'hello world'})
   return response.text
 
 four04 = f"""
