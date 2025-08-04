@@ -18,9 +18,9 @@ def bringiton():
 def stringtest():
   return f"""ello {'mastaru'.upper()}! em chesthunnaru?"""
 
-@app.route('/ello')
+@app.route('/ello/{name}')
 def ello(name):
-  url = "https://nortvx.onrender.com/ello"
+  url = "https://nortvx.onrender.com//ello"
   data = {"text": "ello world"}
   
   try:
