@@ -1,4 +1,4 @@
-home = f"""
+home = f"
 {{% extends "base.html" %}}
 {{% block header %}}
 <link rel='stylesheet href='/static/home_styles.css'>
@@ -9,4 +9,4 @@ home = f"""
 <div id="nx"></div>
 <script src='/static/js/nxtitle.js'></script>
 {{% endblock %}}
-"""
+"
