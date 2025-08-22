@@ -1,83 +1,26 @@
+home = f"""
+<div class="nprtvx">
+<h1 id="nxtitle">nprtvx</h1>
+<div class="section-nm">
 
-
+</div>
+"""
 
 style = f"""
-* {{
-margin: 0;
-padding: 0;
-box-sizing: border-box;
-}}
-
-html, body {{
-background-color: #000d;
-}}
-
-.home {{
+.nprtvx {{
 position: absolute;
 top: 0;
 bottom: 0;
-right: 0;
 left: 0;
-box-shadow: 0 0 0 100rem #8926 inset;
-display: flex;
-align-items: center;
-justify-content: center;
-flex-direction: column;
-background-image: url("https://images.pexels.com/photos/3311574/pexels-photo-3311574.jpeg?auto=compress&cs=tinysrgb&w=1260&h=750&dpr=1");
-background-size: cover;
-background-position: center;
-}}
-
-.home h1 {{
-font-size: 8rem;
-color: #9008;
-text-align: center;
-text-transform: uppercase;
-font-weight: 400;
-border: 8px solid #9008;
-font-family: system-ui, Arial, sans-serif;
-}}
-
-.btn2shoot {{
-position: absolute;
-bottom: 1rem;
-right: 1rem;
-background: linear-gradient(#000d, #000d);
-border-radius: 50%;
-border: 1px solid;
-width: 100px;
-height: 100px;
-}}
-
-.btn2shoot:hover {{
-border: 4px solid;
+right: 0;
+background-image: linear-gradient(26deg, black, white);
 }}
 """
 
 script = f"""
-const home = document.getElementById('home');
-home.classList.add('home');
-const aBtn2shoot = document.createElement('div');
-btn2shoot.setAttribute('id', 'btn2shoot');
-btn2shoot.classList.add('btn2shoot');
-function startbubbles() {{
-const bubble = document.createElement('span');
-bubble.classList.add('bubble');
-bubble.setAttribute('id', 'bubble');
-}}
-btn2shoot.addEventListener('click', () => {{
-startbubbles();
+const nxtitle = document.getElementById("nxtitle");
+nxtitle.addEventListener("click", (event) {{
+console.log(event);
+location.href = "/";
 }});
-"""
-
-home = f"""
-<div id='home'>
-<h1>nprtvx</h1>
-</div>
-<style>
-{style}
-</style>
-<script>
-{script}
-</script>
 """
