@@ -1,12 +1,12 @@
 home = f"""
 {{% extends "base.html" %}}
-<head>
+{{% block header %}}
 <link rel='stylesheet href='/static/home_styles.css'>
-</head>
-<body>
+{{% endblock %}}
+{{% block content %}}
 <div class="nprtvx">
 <a href='/' id="nxtitle">nprtvx</a>
 <div id="nx"></div>
 <script src='/static/js/nxtitle.js'></script>
-</body>
+{{% endblock %}}
 """
