@@ -5,12 +5,15 @@ from a2wsgi import ASGIMiddleware
 import os
 from src.home import home, style, script
 
-def create_page(page_name):
-  with open(f'templates/{page_name if page_name else "home"}.html', 'w') as page:
-    page.write(style+home+script)
-    page.close()
+def create_page(page_name: str | None = None):
+  if page_name is None:
+    page_name="home"
+  if page_name:
+    with open(f"templates/{page_name}.html", 'w') as page:
+      page.write(style+home+script)
+      page.close()
 
-create_page(home)
+create_page("home")
 app = Flask(__name__, template_folder="templates")
 
 @app.route("/")
