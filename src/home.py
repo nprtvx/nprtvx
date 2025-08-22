@@ -31,6 +31,7 @@ location.href = "/";
 </script>
 """
 
-with open('templates/home.html', 'w') as page:
-  page.write(style+home+script)
-  page.close()
+if __name__=="__main__":
+  with open('templates/home.html', 'w') as page:
+    page.write(style+home+script)
+    page.close()
