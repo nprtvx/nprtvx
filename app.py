@@ -1,5 +1,5 @@
 from fastapi import FastAPI
-from flask import Flask, render
+from flask import Flask, render_template
 from werkzeug.middleware.dispatcher import DispatcherMiddleware
 from a2wsgi import ASGIMiddleware
 
