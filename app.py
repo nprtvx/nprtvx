@@ -16,7 +16,7 @@ app = Flask(__name__, template_folder="templates")
 @app.route("/")
 def index():
     # Ensure template exists
-    template_path = os.path.join(app.template_folder, "home.html")
+    template_path = os.path.join(app.template_folder, "templates")
     if not os.path.exists(template_path):
         return "<h1>Home Page Not Found</h1>", 404
     return render_template("home.html")
