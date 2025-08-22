@@ -3,9 +3,9 @@ from flask import Flask
 from werkzeug.middleware.dispatcher import DispatcherMiddleware
 from a2wsgi import ASGIMiddleware
 
-flask_app = Flask(__name__)
+app = Flask(__name__)
 
-@flask_app.route("/")
+@app.route("/")
 def home():
     return "Hello from Flask!"
 
@@ -16,14 +16,14 @@ async def hello_fastapi():
     return {"msg": "Hello from FastAPI"}
 
 # Mount FastAPI inside Flask at the "/fastapi" path
-flask_app.wsgi_app = DispatcherMiddleware(
-    flask_app.wsgi_app, {
+app.wsgi_app = DispatcherMiddleware(
+    app.wsgi_app, {
         '/fastapi': ASGIMiddleware(fastapi_app)
     }
 )
 
 if __name__ == "__main__":
-    flask_app.run()
+    app.run()
 
 
 #eof
