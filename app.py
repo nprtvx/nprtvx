@@ -12,7 +12,7 @@ def home():
     template_path = os.path.join(app.template_folder, "home.html")
     if not os.path.exists(template_path):
         return "<h1>Home Page Not Found</h1>", 404
-    return render_template("src/home.html")
+    return render_template("home.html")
 
 # FastAPI app for additional APIs
 fastapi_app = FastAPI()
