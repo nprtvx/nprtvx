@@ -1,7 +1,7 @@
 home = f"""
 <body>
 <div class="nprtvx">
-<h1 id="nxtitle">nprtvx</h1>
+<a href='/' id="nxtitle">nprtvx</a>
 <div class="section-nm">
 
 </div>
@@ -16,7 +16,13 @@ top: 0;
 bottom: 0;
 left: 0;
 right: 0;
-background-image: linear-gradient(26deg, black, white);
+background-color: black;
+color: white;
+}}
+#nxtitle {{
+position: absolute;
+top: 11px;
+left: 11px;
 }}
 </style>
 """
@@ -24,9 +30,5 @@ background-image: linear-gradient(26deg, black, white);
 script = f"""
 <script>
 const nxtitle = document.getElementById("nxtitle");
-nxtitle.addEventListener("click", (event) {{
-console.log(event);
-location.href = "/";
-}});
 </script>
 """
