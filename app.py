@@ -1,5 +1,5 @@
 from fastapi import FastAPI
-from flask import Flask
+from flask import Flask, render
 from werkzeug.middleware.dispatcher import DispatcherMiddleware
 from a2wsgi import ASGIMiddleware
 
@@ -7,7 +7,7 @@ app = Flask(__name__)
 
 @app.route("/")
 def home():
-    return "Hello from Flask!"
+    return render_template("src//home.html");
 
 fastapi_app = FastAPI()
 
