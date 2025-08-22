@@ -1,5 +1,5 @@
 home = f"""
-{{% extends base.html %}}
+{{% extends "base.html" %}}
 <head>
 <link rel='stylesheet href='/static/home_styles.css'>
 </head>
