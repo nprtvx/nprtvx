@@ -2,5 +2,6 @@ home = f"""
 <div class="nprtvx">
 <a href='/' id="nxtitle">nprtvx</a>
 <div id="nx"></div>
-<script src='/static/ js/nxtitle.js'></script>
+<script src='/static/js/nxtitle.js'></script>
+</div>
 """
