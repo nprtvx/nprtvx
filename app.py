@@ -10,7 +10,7 @@ def create_page(page_name: str | None = None):
     page_name="home"
   if page_name:
     with open(f"templates/{page_name}.html", 'w') as page:
-      page.write(home)
+      page.write(home.toString())
       page.close()
 
 create_page("home")
