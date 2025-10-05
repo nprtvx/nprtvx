@@ -21,11 +21,11 @@ def index():
     template_path = os.path.join(app.template_folder, "home.html")
     if not os.path.exists(template_path):
         return "<h1>Home Page Not Found</h1>", 404
-    return home, 200
+    return home.home, 200
 
 @app.route("/popeye")
 async def popeye():
-  return popeye
+  return popeye.popeye
 
 if __name__ == "__main__":
     app.run()
