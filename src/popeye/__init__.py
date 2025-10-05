@@ -9,13 +9,6 @@ style = """
 script = """
 const popeye = document.getElementById('popeye');
 popeye.classList.add('popeye');
-"""
-
-popeye = """
-<canvas id='renderCanvas'></canvas>
-<script src="https://cdn.babylonjs.com/babylon.js"></script>
-<script src="https://cdn.babylonjs.com/loaders/babylon.glTF2FileLoader.js"></script>
-<script>
     // Include Babylon.js and the Babylon GUI libraries in your HTML for this to work.
     // Example: <script src="https://cdn.babylonjs.com/babylon.js"></script>
     // <script src="https://cdn.babylonjs.com/loaders/babylon.glTF2FileLoader.js"></script>
@@ -109,5 +102,11 @@ popeye = """
     window.addEventListener("resize", function () {
         engine.resize();
     });
-</script>
+"""
+
+popeye = """
+<canvas id='renderCanvas'></canvas>
+<script src="https://cdn.babylonjs.com/babylon.js"></script>
+<script src="https://cdn.babylonjs.com/loaders/babylon.glTF2FileLoader.js"></script>
+{script}
 """
