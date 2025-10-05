@@ -1,4 +1,3 @@
-from fastapi import FastAPI
 from flask import Flask, render_template, abort
 from werkzeug.middleware.dispatcher import DispatcherMiddleware
 from a2wsgi import ASGIMiddleware
@@ -24,19 +23,8 @@ def index():
         return "<h1>Home Page Not Found</h1>", 404
     return home, 200
 
-# FastAPI app for additional APIs
-fastapi_app = FastAPI()
-
-@fastapi_app.get("/")
-async def hello_fastapi():
-    return {"msg": "Hello from FastAPI"}
-
-# Mount FastAPI inside Flask at the "/fastapi" path
-app.wsgi_app = DispatcherMiddleware(
-    app.wsgi_app, {
-        '/fastapi': ASGIMiddleware(fastapi_app)
-    }
-)
-
+@app.route("/popeye")
+async def popeye():
+  return "ello popeye wazzuppp"
 if __name__ == "__main__":
     app.run()
