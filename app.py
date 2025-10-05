@@ -24,7 +24,7 @@ def index():
     return home.home, 200
 
 @app.route("/popeye")
-async def popeye():
+async def pope():
   return popeye.popeye
 
 if __name__ == "__main__":
