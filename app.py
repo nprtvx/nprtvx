@@ -2,7 +2,7 @@ from flask import Flask, render_template, abort
 from werkzeug.middleware.dispatcher import DispatcherMiddleware
 from a2wsgi import ASGIMiddleware
 import os
-from src.home import home
+from src import home, popeye
 
 def create_page(page_name: str | None = None):
   if page_name is None:
@@ -25,6 +25,7 @@ def index():
 
 @app.route("/popeye")
 async def popeye():
-  return "ello popeye wazzuppp"
+  return popeye
+
 if __name__ == "__main__":
     app.run()
