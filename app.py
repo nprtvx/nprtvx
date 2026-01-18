@@ -24,8 +24,12 @@ def index():
     return home.home, 200
 
 @app.route("/popeye")
-async def pope():
-  return popeye.popeye
+def pope():
+      # Ensure template exists
+    template_path = os.path.join(app.template_folder, "popeye.html")
+    if not os.path.exists(template_path):
+        return "<h1>Home Page Not Found</h1>", 404
+    return popeye.popeye, 200
 
 if __name__ == "__main__":
     app.run()
