@@ -13,6 +13,7 @@ def create_page(page_name: str | None = None):
       page.close()
 
 create_page("home")
+create_page("popeye")
 app = Flask(__name__, template_folder="templates")
 
 @app.route("/")
