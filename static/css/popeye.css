@@ -1,0 +1,9 @@
+.popeye{{
+background: linear-gradient(#32323288);
+color: #261192;
+}}
+h2 span{{
+  background-color: yellow;
+  padding: 0 4px;
+  border-radius: 4px;
+}}

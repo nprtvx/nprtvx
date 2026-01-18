@@ -2,35 +2,33 @@ from flask import Flask, render_template, abort
 from werkzeug.middleware.dispatcher import DispatcherMiddleware
 from a2wsgi import ASGIMiddleware
 import os
-from src import home, popeye
+from src.home import home
+from src.popeye import popeye
 
-def create_page(page_name: str | None = None):
-  if page_name is None:
-    page_name="home"
+def create_page(page_name: str):
   if page_name:
     with open(f"templates/{page_name}.html", 'w') as page:
-      page.write(home.home)
+      if(page_name == "home"):
+        page.write(home)
+      elif page_name == "popeye":
+        page.write(popeye)
       page.close()
+  template_path = os.path.join(app.template_folder, f"{page_name}.html")
+  if not os.path.exists(template_path):
+      return f"<h1>{page_name.capitalize()}: Page Not Found</h1>", 404
+  return template_path.split('/')[1]
 
-create_page("home")
-create_page("popeye")
 app = Flask(__name__, template_folder="templates")
 
 @app.route("/")
 def index():
-    # Ensure template exists
-    template_path = os.path.join(app.template_folder, "home.html")
-    if not os.path.exists(template_path):
-        return "<h1>Home Page Not Found</h1>", 404
-    return home.home, 200
+  # Ensure template exists
+  return render_template(create_page("home"))
 
 @app.route("/popeye")
 def pope():
-      # Ensure template exists
-    template_path = os.path.join(app.template_folder, "popeye.html")
-    if not os.path.exists(template_path):
-        return "<h1>Home Page Not Found</h1>", 404
-    return popeye.popeye, 200
+  # Ensure template exists
+  return render_template(create_page("popeye"))
 
 if __name__ == "__main__":
     app.run()
