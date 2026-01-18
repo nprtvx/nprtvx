@@ -108,5 +108,5 @@ popeye = """
 <canvas id='renderCanvas'></canvas>
 <script src="https://cdn.babylonjs.com/babylon.js"></script>
 <script src="https://cdn.babylonjs.com/loaders/babylon.glTF2FileLoader.js"></script>
-{script}
+{{script}}
 """
