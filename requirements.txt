@@ -1,6 +1,0 @@
-Flask[async]
-fastapi
-uvicorn
-gunicorn
-requests
-a2wsgi

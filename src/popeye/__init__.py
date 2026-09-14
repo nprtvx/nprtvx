@@ -1,8 +1,0 @@
-popeye = """
-<head>
-<link rel="stylesheet" herf="static/css/popeye.css"/>
-</head>
-<div class="popeye">
-<h2>Hi <span>popeye!</span></h2>
-</div>
-"""
