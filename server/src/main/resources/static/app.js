@@ -256,10 +256,35 @@ function renderMessage(message) {
   messages.append(row);
 }
 
-async function api(path, options = {}) {
+let restoringSession;
+
+async function restoreServerSession() {
+  if (restoringSession) return restoringSession;
+  const saved = JSON.parse(localStorage.getItem('neonmonkey_identity') || 'null');
+  if (!saved?.accountId || !saved?.recoveryBundle) return false;
+  restoringSession = fetch('/api/identity/restore', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      accountId: saved.accountId,
+      displayName: saved.displayName,
+      publicKey: saved.publicKey,
+      recoveryBundle: saved.recoveryBundle
+    })
+  }).then((response) => response.ok).finally(() => {
+    restoringSession = undefined;
+  });
+  return restoringSession;
+}
+
+async function api(path, options = {}, retried = false) {
   const response = await fetch(path, { ...options, headers: { 'Content-Type': 'application/json', ...(options.headers || {}) } });
   let body = null;
   try { body = await response.json(); } catch (_) {}
+  if (response.status === 401 && !retried && path !== '/api/identity/restore'
+      && await restoreServerSession()) {
+    return api(path, options, true);
+  }
   if (!response.ok) throw new Error(body?.message || body?.detail || `Request failed (${response.status})`);
   return body;
 }
