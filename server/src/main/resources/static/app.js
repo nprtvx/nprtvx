@@ -15,6 +15,11 @@ const input = document.querySelector('#message-input');
 const profileName = document.querySelector('#profile-name');
 const profileEmail = document.querySelector('#profile-email');
 const logoutButton = document.querySelector('#logout-button');
+const recipientForm = document.querySelector('#recipient-form');
+const recipientInput = document.querySelector('#recipient-input');
+const recipientError = document.querySelector('#recipient-error');
+const recipientLabel = document.querySelector('#recipient-label');
+const conversationName = document.querySelector('#conversation-name');
 const recoveryDialog = document.querySelector('#recovery-dialog');
 const recoveryPhrase = document.querySelector('#recovery-phrase');
 const recoveryCopy = document.querySelector('#recovery-copy');
@@ -22,6 +27,9 @@ let restoreMode = false;
 let currentIdentity;
 let pollTimer;
 let generatedIdentity;
+let currentPrivateKey;
+let currentRecipient;
+let currentRecipientKey;
 
 const WORDS = ['amber', 'anchor', 'apple', 'arrow', 'atlas', 'autumn', 'bamboo', 'beacon', 'berry', 'blossom', 'blue', 'breeze', 'canyon', 'cedar', 'circle', 'cloud', 'cobalt', 'comet', 'coral', 'crystal', 'dawn', 'delta', 'ember', 'falcon', 'forest', 'glow', 'harbor', ' Hazel'.trim(), 'island', 'jasmine', 'lantern', 'lemon', 'linen', 'maple', 'meadow', 'meteor', 'mint', 'moon', 'navy', 'ocean', 'olive', 'orbit', 'pebble', 'pine', 'plum', 'prairie', 'rain', 'river', 'rose', 'saffron', 'shadow', 'silver', 'sky', 'snow', 'solar', 'sparrow', 'spring', 'stone', 'sunset', 'tulip', 'velvet', 'violet', 'willow', 'winter'];
 
@@ -76,6 +84,47 @@ async function decryptBundle(serialized, phrase) {
   return JSON.parse(new TextDecoder().decode(plaintext));
 }
 
+async function importPrivateKey(jwk) {
+  return crypto.subtle.importKey('jwk', jwk, { name: 'ECDH', namedCurve: 'P-256' }, true, ['deriveKey', 'deriveBits']);
+}
+
+async function importPublicKey(jwk) {
+  return crypto.subtle.importKey('jwk', jwk, { name: 'ECDH', namedCurve: 'P-256' }, true, []);
+}
+
+async function encryptMessage(text) {
+  const key = await crypto.subtle.deriveKey(
+    { name: 'ECDH', public: currentRecipientKey },
+    currentPrivateKey,
+    { name: 'AES-GCM', length: 256 },
+    false,
+    ['encrypt', 'decrypt']
+  );
+  const iv = crypto.getRandomValues(new Uint8Array(12));
+  const ciphertext = await crypto.subtle.encrypt(
+    { name: 'AES-GCM', iv },
+    key,
+    new TextEncoder().encode(text)
+  );
+  return { iv: bytesToBase64(iv), ciphertext: bytesToBase64(new Uint8Array(ciphertext)) };
+}
+
+async function decryptMessage(message, senderPublicKey) {
+  const key = await crypto.subtle.deriveKey(
+    { name: 'ECDH', public: senderPublicKey },
+    currentPrivateKey,
+    { name: 'AES-GCM', length: 256 },
+    false,
+    ['decrypt']
+  );
+  const plaintext = await crypto.subtle.decrypt(
+    { name: 'AES-GCM', iv: base64ToBytes(message.iv) },
+    key,
+    base64ToBytes(message.ciphertext)
+  );
+  return new TextDecoder().decode(plaintext);
+}
+
 function createRecoveryPhrase() {
   const random = crypto.getRandomValues(new Uint8Array(12));
   return [...random].map((byte) => WORDS[byte % WORDS.length]).join(' ');
@@ -113,9 +162,21 @@ async function api(path, options = {}) {
 }
 
 async function loadMessages(scroll = false) {
-  const data = await api('/api/messages');
+  if (!currentRecipient || !currentRecipientKey || !currentPrivateKey) return;
+  const data = await api(`/api/direct/${currentRecipient.accountId}`);
   messages.replaceChildren();
-  data.forEach(renderMessage);
+  for (const message of data) {
+    const sentByMe = message.senderAccountId === currentIdentity.accountId;
+    const sender = sentByMe ? currentIdentity : await api(`/api/identity/${message.senderAccountId}`);
+    const keyOwner = sentByMe ? currentRecipient : sender;
+    const text = await decryptMessage(message, await importPublicKey(JSON.parse(keyOwner.publicKey)));
+    renderMessage({
+      name: sender.displayName,
+      text,
+      time: new Date(message.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+      mine: sentByMe
+    });
+  }
   if (scroll) messages.scrollTop = messages.scrollHeight;
 }
 
@@ -158,17 +219,41 @@ authForm.addEventListener('submit', async (event) => {
       const displayName = displayNameInput.value.trim();
       if (!displayName) throw new Error('Enter a display name');
       generatedIdentity = await createIdentity(displayName);
+      currentPrivateKey = await importPrivateKey((await decryptBundle(generatedIdentity.identity.recoveryBundle, generatedIdentity.phrase)).privateKey);
       const registered = await api('/api/identity/register', { method: 'POST', body: JSON.stringify(generatedIdentity.identity) });
       recoveryPhrase.textContent = generatedIdentity.phrase;
       recoveryDialog.showModal();
       showApp(registered);
     } else {
       const response = await api('/api/identity/restore', { method: 'POST', body: JSON.stringify({ accountId: accountIdInput.value.trim().toLowerCase() }) });
-      await decryptBundle(response.recoveryBundle, prompt('Enter your recovery phrase') || '');
+      const bundle = await decryptBundle(response.recoveryBundle, prompt('Enter your recovery phrase') || '');
+      currentPrivateKey = await importPrivateKey(bundle.privateKey);
       showApp(response);
     }
   } catch (error) {
     authError.textContent = error.message.includes('OperationError') ? 'That recovery phrase is incorrect.' : error.message;
+  }
+});
+
+recipientForm.addEventListener('submit', async (event) => {
+  event.preventDefault();
+  recipientError.textContent = '';
+  const accountId = recipientInput.value.trim().toLowerCase();
+  if (!/^[a-f0-9]{32}$/.test(accountId)) {
+    recipientError.textContent = 'Enter a valid 32-character account ID.';
+    return;
+  }
+  try {
+    const recipient = await api(`/api/identity/${accountId}`);
+    currentRecipient = recipient;
+    currentRecipientKey = await importPublicKey(JSON.parse(recipient.publicKey));
+    recipientLabel.innerHTML = `<i>↗</i> ${escapeHtml(recipient.displayName)}`;
+    conversationName.textContent = recipient.displayName;
+    input.disabled = false;
+    input.placeholder = `Message ${recipient.displayName}`;
+    await loadMessages(true);
+  } catch (error) {
+    recipientError.textContent = error.message;
   }
 });
 
@@ -188,7 +273,9 @@ form.addEventListener('submit', async (event) => {
   if (!text) return;
   input.value = '';
   try {
-    await api('/api/messages', { method: 'POST', body: JSON.stringify({ text }) });
+    if (!currentRecipient) throw new Error('Select a conversation first');
+    const encrypted = await encryptMessage(text);
+    await api(`/api/direct/${currentRecipient.accountId}`, { method: 'POST', body: JSON.stringify(encrypted) });
     await loadMessages(true);
   } catch (_) {
     input.value = text;

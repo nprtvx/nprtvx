@@ -22,7 +22,7 @@ public final class ChatServer {
     private static final DateTimeFormatter TIME_FORMAT = DateTimeFormatter.ofPattern("HH:mm");
     private final Map<String, Identity> identities = new ConcurrentHashMap<>();
     private final Map<String, String> sessions = new ConcurrentHashMap<>();
-    private final List<Message> messages = new CopyOnWriteArrayList<>();
+    private final List<EncryptedMessage> messages = new CopyOnWriteArrayList<>();
 
     public static void main(String[] args) {
         SpringApplication.run(ChatServer.class, args);
@@ -65,6 +65,16 @@ public final class ChatServer {
         return new IdentityResponse(identity.accountId(), identity.displayName(), identity.publicKey(), identity.recoveryBundle());
     }
 
+    @GetMapping("/api/identity/{accountId}")
+    public PublicIdentity findIdentity(@PathVariable String accountId, HttpServletRequest request) {
+        requireIdentity(request);
+        Identity identity = identities.get(accountId.toLowerCase(Locale.ROOT));
+        if (identity == null) {
+            throw new ResponseStatusException(HttpStatus.NOT_FOUND, "Identity not found");
+        }
+        return new PublicIdentity(identity.accountId(), identity.displayName(), identity.publicKey());
+    }
+
     @PostMapping("/api/auth/logout")
     public void logout(HttpServletRequest request, HttpServletResponse response) {
         String token = cookieValue(request, SESSION_COOKIE);
@@ -75,28 +85,36 @@ public final class ChatServer {
         response.addCookie(cookie);
     }
 
-    @GetMapping("/api/messages")
-    public List<Message> getMessages(HttpServletRequest request) {
+    @GetMapping("/api/direct/{recipientAccountId}")
+    public List<EncryptedMessage> getDirectMessages(@PathVariable String recipientAccountId,
+                                                    HttpServletRequest request) {
         Identity identity = requireIdentity(request);
         return messages.stream()
-                .map(message -> new Message(message.accountId(), message.name(), message.text(), message.time(),
-                        message.accountId().equals(identity.accountId())))
+                .filter(message -> (message.senderAccountId().equals(identity.accountId())
+                        && message.recipientAccountId().equals(recipientAccountId))
+                        || (message.senderAccountId().equals(recipientAccountId)
+                        && message.recipientAccountId().equals(identity.accountId())))
                 .toList();
     }
 
-    @PostMapping("/api/messages")
-    public Message addMessage(@RequestBody(required = false) MessageRequest request,
-                              HttpServletRequest httpRequest) {
+    @PostMapping("/api/direct/{recipientAccountId}")
+    public EncryptedMessage addDirectMessage(@PathVariable String recipientAccountId,
+                                             @RequestBody(required = false) EncryptedMessageRequest request,
+                                             HttpServletRequest httpRequest) {
         Identity identity = requireIdentity(httpRequest);
-        if (request == null || blank(request.text())) {
-            throw badRequest("Message text is required");
+        Identity recipient = identities.get(recipientAccountId.toLowerCase(Locale.ROOT));
+        if (recipient == null) {
+            throw new ResponseStatusException(HttpStatus.NOT_FOUND, "Recipient identity not found");
         }
-        String text = request.text().trim();
-        if (text.length() > 2000) {
-            throw badRequest("Messages cannot exceed 2000 characters");
+        if (request == null || blank(request.iv()) || blank(request.ciphertext())) {
+            throw badRequest("Encrypted message data is required");
         }
-        Message message = new Message(identity.accountId(), identity.displayName(), text,
-                LocalTime.now().format(TIME_FORMAT), true);
+        if (request.iv().length() > 100 || request.ciphertext().length() > 10000) {
+            throw badRequest("Encrypted message data is too large");
+        }
+        EncryptedMessage message = new EncryptedMessage(
+                identity.accountId(), recipient.accountId(), request.iv(), request.ciphertext(),
+                System.currentTimeMillis());
         messages.add(message);
         return message;
     }
@@ -158,6 +176,8 @@ public final class ChatServer {
     public record RegisterRequest(String accountId, String displayName, String publicKey, String recoveryBundle) {}
     public record RestoreRequest(String accountId) {}
     public record IdentityResponse(String accountId, String displayName, String publicKey, String recoveryBundle) {}
-    public record MessageRequest(String text) {}
-    public record Message(String accountId, String name, String text, String time, boolean mine) {}
+    public record PublicIdentity(String accountId, String displayName, String publicKey) {}
+    public record EncryptedMessageRequest(String iv, String ciphertext) {}
+    public record EncryptedMessage(String senderAccountId, String recipientAccountId, String iv,
+                                   String ciphertext, long createdAt) {}
 }

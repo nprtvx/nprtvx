@@ -39,18 +39,21 @@
         <button class="nav-item"><span>☆</span> Saved</button>
         <button class="nav-item"><span>⌕</span> Search</button>
       </nav>
-      <div class="channel-heading"><span>Channels</span><button class="plus-button" aria-label="Add channel">+</button></div>
-      <nav class="channels" aria-label="Channels">
-        <button class="channel active"><i>#</i> project-lounge <span class="unread-dot"></span></button>
-        <button class="channel"><i>#</i> design-critique</button>
-        <button class="channel"><i>#</i> off-topic</button>
+      <div class="channel-heading"><span>Direct message</span></div>
+      <form id="recipient-form" class="recipient-form">
+        <input id="recipient-input" autocomplete="off" placeholder="Paste recipient ID" aria-label="Recipient account ID" required>
+        <button type="submit">Open</button>
+      </form>
+      <p id="recipient-error" class="recipient-error" role="alert"></p>
+      <nav class="channels" aria-label="Direct messages">
+        <button id="recipient-label" class="channel active" type="button"><i>↗</i> No conversation selected</button>
       </nav>
       <div class="sidebar-footer"><div class="avatar avatar-you">A</div><div><strong id="profile-name">Anonymous</strong><small id="profile-email">Identity</small></div><button id="logout-button" class="more-button" type="button">Lock</button></div>
     </aside>
     <section class="chat-panel">
-      <header class="chat-header"><div><p class="eyebrow">CHANNEL</p><h1><span>#</span> project-lounge</h1><p class="subtitle">A space for ideas, updates, and good questions.</p></div><div class="header-actions"><button class="round-button" aria-label="Start call">⌁</button><button class="round-button" aria-label="Channel details">ⓘ</button><div class="member-stack"><span class="avatar avatar-maya">M</span><span class="avatar avatar-jules">J</span><span class="avatar avatar-lee">L</span><span class="member-count">+8</span></div></div></header>
+      <header class="chat-header"><div><p class="eyebrow">END-TO-END ENCRYPTED</p><h1><span>↗</span> <span id="conversation-name">No conversation selected</span></h1><p class="subtitle">Only you and the recipient can decrypt these messages.</p></div><div class="header-actions"><button class="round-button" aria-label="Conversation details">ⓘ</button></div></header>
       <div id="messages" class="messages" aria-live="polite"></div>
-      <div class="composer-wrap"><div class="typing-indicator"><span></span><span></span><span></span> Maya is typing</div><form id="message-form" class="composer"><button type="button" class="compose-icon" aria-label="Add attachment">+</button><input id="message-input" autocomplete="off" placeholder="Message #project-lounge" aria-label="Message"><button class="send-button" type="submit" aria-label="Send message">↑</button></form><p class="composer-hint"><kbd>Enter</kbd> to send <span>·</span> <kbd>Shift + Enter</kbd> for a new line</p></div>
+      <div class="composer-wrap"><div class="typing-indicator">Messages are encrypted on this device before sending.</div><form id="message-form" class="composer"><button type="button" class="compose-icon" aria-label="Add attachment">+</button><input id="message-input" autocomplete="off" placeholder="Select a conversation first" aria-label="Message" disabled><button class="send-button" type="submit" aria-label="Send message">↑</button></form><p class="composer-hint"><kbd>Enter</kbd> to send <span>·</span> <kbd>Shift + Enter</kbd> for a new line</p></div>
     </section>
     <aside class="details-panel"><div class="details-top"><span>About this channel</span><button class="close-details" aria-label="Close details">×</button></div><div class="channel-illustration">✦</div><h2>project-lounge</h2><p class="details-copy">The informal corner of Gather. Bring work in progress, tiny wins, and anything worth sharing.</p><div class="detail-section"><p class="section-label">Pinned note</p><div class="note"><span>✦</span><p>Demo day is Friday at 4:00 PM.<br><small>Added by Maya · yesterday</small></p></div></div><div class="detail-section"><p class="section-label">People <span>11 members</span></p><div class="people"><div class="person"><span class="avatar avatar-maya">M</span><span><strong>Maya Chen</strong><small>Workspace admin</small></span><i class="status"></i></div><div class="person"><span class="avatar avatar-jules">J</span><span><strong>Jules Park</strong><small>Product designer</small></span><i class="status"></i></div><div class="person"><span class="avatar avatar-lee">L</span><span><strong>Lee Robinson</strong><small>Engineer</small></span><i class="status away"></i></div></div></div></aside>
   </main>
