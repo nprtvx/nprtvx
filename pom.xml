@@ -8,7 +8,7 @@
     <relativePath/>
   </parent>
   <groupId>com.neonmonkey</groupId>
-  <artifactId>gather-chat</artifactId>
+  <artifactId>neonmonkey</artifactId>
   <version>1.0.0</version>
   <properties>
     <java.version>17</java.version>

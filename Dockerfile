@@ -8,7 +8,7 @@ RUN mvn -q clean package -DskipTests
 FROM eclipse-temurin:17-jre
 
 WORKDIR /app
-COPY --from=build /app/target/gather-chat-1.0.0.jar app.jar
+COPY --from=build /app/target/neonmonkey-1.0.0.jar app.jar
 
 EXPOSE 8080
 

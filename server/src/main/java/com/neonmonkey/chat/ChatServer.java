@@ -25,7 +25,7 @@ import java.net.http.HttpResponse;
 @EnableScheduling
 @RestController
 public final class ChatServer {
-    private static final String SESSION_COOKIE = "gather_session";
+    private static final String SESSION_COOKIE = "neonmonkey_session";
     private static final DateTimeFormatter TIME_FORMAT = DateTimeFormatter.ofPattern("HH:mm");
     private final Map<String, Identity> identities = new ConcurrentHashMap<>();
     private final Map<String, String> sessions = new ConcurrentHashMap<>();
@@ -42,6 +42,11 @@ public final class ChatServer {
     @GetMapping("/health")
     public Map<String, String> health() {
         return Map.of("status", "ok");
+    }
+
+    @GetMapping({"/messages", "/settings"})
+    public String appRoute() {
+        return "forward:/index.html";
     }
 
     @PostMapping("/api/identity/register")

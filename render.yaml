@@ -1,6 +1,6 @@
 services:
   - type: web
-    name: gather-chat
+    name: neonmonkey
     runtime: docker
     plan: free
     healthCheckPath: /health

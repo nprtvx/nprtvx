@@ -2,10 +2,13 @@ const authScreen = document.querySelector('#auth-screen');
 const appShell = document.querySelector('#app-shell');
 const authForm = document.querySelector('#auth-form');
 const authSubmit = document.querySelector('#auth-submit');
+const landingActions = document.querySelector('#landing-actions');
+const authFormPanel = document.querySelector('#auth-form-panel');
+const createAccountButton = document.querySelector('#create-account-button');
+const restoreAccountButton = document.querySelector('#restore-account-button');
+const backToLanding = document.querySelector('#back-to-landing');
 const authError = document.querySelector('#auth-error');
-const authSwitch = document.querySelector('#auth-switch');
 const authTitle = document.querySelector('#auth-title');
-const authPrompt = document.querySelector('#auth-prompt');
 const recoveryField = document.querySelector('#recovery-field');
 const recoveryInput = document.querySelector('#recovery-input');
 const nameField = document.querySelector('#name-field');
@@ -37,6 +40,7 @@ const recoveryPhrase = document.querySelector('#recovery-phrase');
 const recoveryCopy = document.querySelector('#recovery-copy');
 const recoveryIdCopy = document.querySelector('#recovery-id-copy');
 const recoveryContinue = document.querySelector('#recovery-continue');
+const pageTitle = document.querySelector('#page-title');
 let restoreMode = false;
 let currentIdentity;
 let pollTimer;
@@ -281,7 +285,23 @@ async function loadMessages(scroll = false) {
   if (scroll) messages.scrollTop = messages.scrollHeight;
 }
 
-function showApp(identity) {
+function navigate(path) {
+  history.pushState({}, '', path);
+  renderRoute(path);
+}
+
+function renderRoute(path = window.location.pathname) {
+  const settings = path === '/settings';
+  if (settings) {
+    pageTitle.textContent = 'Your profile';
+    showSettingsTab();
+  } else {
+    pageTitle.textContent = 'Messages';
+    showMessagesTab();
+  }
+}
+
+function showApp(identity, path = '/messages') {
   currentIdentity = identity;
   const shortId = identity.accountId.slice(0, 8);
   profileName.textContent = identity.displayName || `anon-${shortId}`;
@@ -290,7 +310,7 @@ function showApp(identity) {
   settingsAccountId.textContent = identity.accountId;
   authScreen.hidden = true;
   appShell.hidden = false;
-  showMessagesTab();
+  renderRoute(path);
   renderRecentChats();
   loadMessages(true).catch(() => {});
   clearInterval(pollTimer);
@@ -335,22 +355,28 @@ function showAuth() {
   clearInterval(pollTimer);
   appShell.hidden = true;
   authScreen.hidden = false;
+  landingActions.hidden = false;
+  authFormPanel.hidden = true;
+  authForm.reset();
+  recoveryInput.value = '';
 }
 
-function updateAuthMode() {
-  restoreMode = !restoreMode;
-  authTitle.textContent = restoreMode ? 'Log in to NeonMonkey' : 'Create an account';
-  authPrompt.textContent = restoreMode ? 'New to NeonMonkey?' : 'Already have an account?';
-  authSwitch.textContent = restoreMode ? 'Create account' : 'Log in';
+function openAuth(mode) {
+  restoreMode = mode === 'restore';
+  landingActions.hidden = true;
+  authFormPanel.hidden = false;
+  authTitle.textContent = restoreMode ? 'Restore your account' : 'Create your account';
   nameField.hidden = restoreMode;
   displayNameInput.required = !restoreMode;
   recoveryField.hidden = !restoreMode;
   recoveryInput.required = restoreMode;
-  authForm.querySelector('button[type="submit"]').textContent = restoreMode ? 'Log in' : 'Create account';
+  authSubmit.textContent = restoreMode ? 'Restore account' : 'Create account';
   authError.textContent = '';
 }
 
-authSwitch.addEventListener('click', updateAuthMode);
+createAccountButton.addEventListener('click', () => openAuth('create'));
+restoreAccountButton.addEventListener('click', () => openAuth('restore'));
+backToLanding.addEventListener('click', showAuth);
 authForm.addEventListener('submit', async (event) => {
   event.preventDefault();
   authError.textContent = '';
@@ -375,7 +401,7 @@ authForm.addEventListener('submit', async (event) => {
       recoveryCopy.textContent = 'Copy phrase';
       recoveryDialog.showModal();
       await waitForRecoveryConfirmation();
-      showApp(registered);
+      showApp(registered, '/settings');
     } else {
       const saved = JSON.parse(localStorage.getItem('neonmonkey_identity') || 'null');
       if (!saved?.accountId) throw new Error('This device has no saved NeonMonkey identity. Restore it on the device where you created it.');
@@ -397,7 +423,7 @@ authForm.addEventListener('submit', async (event) => {
         displayName,
         publicKey
       }));
-      showApp(response);
+      showApp(response, '/messages');
     }
   } catch (error) {
     authError.textContent = error.message.includes('OperationError')
@@ -439,6 +465,9 @@ function showSettingsTab() {
 
 messagesTab.addEventListener('click', showMessagesTab);
 settingsTab.addEventListener('click', showSettingsTab);
+messagesTab.addEventListener('click', () => navigate('/messages'));
+settingsTab.addEventListener('click', () => navigate('/settings'));
+window.addEventListener('popstate', () => renderRoute());
 settingsLock.addEventListener('click', async () => {
   await api('/api/auth/logout', { method: 'POST' }).catch(() => {});
   showAuth();
@@ -510,4 +539,4 @@ attachmentInput.addEventListener('change', async () => {
   }
 });
 
-api('/api/identity/me').then(showApp).catch(showAuth);
+api('/api/identity/me').then((identity) => showApp(identity, window.location.pathname)).catch(showAuth);
