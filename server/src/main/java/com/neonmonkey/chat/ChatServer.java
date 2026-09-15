@@ -8,6 +8,7 @@ import org.springframework.boot.autoconfigure.SpringBootApplication;
 import org.springframework.http.HttpStatus;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.server.ResponseStatusException;
+import org.springframework.web.servlet.ModelAndView;
 import org.springframework.scheduling.annotation.EnableScheduling;
 import org.springframework.scheduling.annotation.Scheduled;
 
@@ -45,8 +46,8 @@ public final class ChatServer {
     }
 
     @GetMapping({"/", "/create", "/restore", "/messages", "/settings"})
-    public String appRoute() {
-        return "forward:/index.html";
+    public ModelAndView appRoute() {
+        return new ModelAndView("forward:/index.html");
     }
 
     @PostMapping("/api/identity/register")
