@@ -35,6 +35,11 @@ public final class ChatServer {
         SpringApplication.run(ChatServer.class, args);
     }
 
+    @GetMapping("/health")
+    public Map<String, String> health() {
+        return Map.of("status", "ok");
+    }
+
     @GetMapping("/api/auth/me")
     public UserResponse currentUser(HttpServletRequest request) {
         return userResponse(requireUser(request));

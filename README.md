@@ -32,6 +32,6 @@ If creating the service manually, use:
 | Dockerfile path | `./Dockerfile` |
 | Docker context | `.` |
 | Instance type | Free |
-| Health check path | `/api/messages` |
+| Health check path | `/health` |
 
 Do not set `PORT` manually. Render provides it automatically, and the container uses it to bind the Spring Boot server.
