@@ -121,6 +121,17 @@ async function importPublicKey(jwk) {
   return crypto.subtle.importKey('jwk', jwk, { name: 'ECDH', namedCurve: 'P-256' }, true, []);
 }
 
+async function restoreSessionPrivateKey() {
+  const serialized = sessionStorage.getItem('neonmonkey_private_key');
+  if (!serialized) return false;
+  currentPrivateKey = await importPrivateKey(JSON.parse(serialized));
+  return true;
+}
+
+async function rememberSessionPrivateKey(jwk) {
+  sessionStorage.setItem('neonmonkey_private_key', JSON.stringify(jwk));
+}
+
 async function encryptMessage(text) {
   const key = await crypto.subtle.deriveKey(
     { name: 'ECDH', public: currentRecipientKey },
@@ -361,6 +372,7 @@ async function openDirectChat(accountId) {
 
 function showAuth() {
   clearInterval(pollTimer);
+  sessionStorage.removeItem('neonmonkey_private_key');
   currentIdentity = undefined;
   currentPrivateKey = undefined;
   currentRecipient = undefined;
@@ -411,7 +423,9 @@ authForm.addEventListener('submit', async (event) => {
       const displayName = displayNameInput.value.trim();
       if (!displayName) throw new Error('Enter a display name');
       generatedIdentity = await createIdentity(displayName);
-      currentPrivateKey = await importPrivateKey((await decryptBundle(generatedIdentity.identity.recoveryBundle, generatedIdentity.phrase)).privateKey);
+      const generatedBundle = await decryptBundle(generatedIdentity.identity.recoveryBundle, generatedIdentity.phrase);
+      currentPrivateKey = await importPrivateKey(generatedBundle.privateKey);
+      await rememberSessionPrivateKey(generatedBundle.privateKey);
       const registered = await api('/api/identity/register', { method: 'POST', body: JSON.stringify(generatedIdentity.identity) });
       localStorage.setItem('neonmonkey_identity', JSON.stringify({
         accountId: registered.accountId,
@@ -450,6 +464,7 @@ authForm.addEventListener('submit', async (event) => {
       const bundleSource = saved?.accountId === accountId ? saved.recoveryBundle : response.recoveryBundle;
       const bundle = await decryptBundle(bundleSource, phrase);
       currentPrivateKey = await importPrivateKey(bundle.privateKey);
+      await rememberSessionPrivateKey(bundle.privateKey);
       const publicKey = saved?.publicKey || JSON.stringify(bundle.publicKey);
       const displayName = saved?.displayName || response.displayName || `anon-${accountId.slice(0, 8)}`;
       localStorage.setItem('neonmonkey_identity', JSON.stringify({
@@ -550,8 +565,9 @@ form.addEventListener('submit', async (event) => {
       }) });
     }
     await loadMessages(true);
-  } catch (_) {
+  } catch (error) {
     input.value = text;
+    input.placeholder = error.message || 'Message could not be sent';
   }
 });
 
@@ -585,7 +601,10 @@ attachmentInput.addEventListener('change', async () => {
 });
 
 api('/api/identity/me')
-  .then((identity) => showApp(identity, window.location.pathname))
+  .then(async (identity) => {
+    await restoreSessionPrivateKey();
+    showApp(identity, window.location.pathname);
+  })
   .catch(() => {
     showAuth();
     renderAuthRoute();
