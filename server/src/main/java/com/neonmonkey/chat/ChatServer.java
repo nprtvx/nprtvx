@@ -38,11 +38,11 @@ public final class ChatServer {
                                      HttpServletResponse response) {
         validateRegistration(request);
         if (identities.putIfAbsent(request.accountId(), new Identity(
-                request.accountId(), request.publicKey(), request.recoveryBundle())) != null) {
+                request.accountId(), request.displayName(), request.publicKey(), request.recoveryBundle())) != null) {
             throw new ResponseStatusException(HttpStatus.CONFLICT, "That identity already exists");
         }
         createSession(request.accountId(), response);
-        return new IdentityResponse(request.accountId(), request.publicKey(), request.recoveryBundle());
+        return new IdentityResponse(request.accountId(), request.displayName(), request.publicKey(), request.recoveryBundle());
     }
 
     @PostMapping("/api/identity/restore")
@@ -56,13 +56,13 @@ public final class ChatServer {
             throw new ResponseStatusException(HttpStatus.NOT_FOUND, "Identity not found");
         }
         createSession(identity.accountId(), response);
-        return new IdentityResponse(identity.accountId(), identity.publicKey(), identity.recoveryBundle());
+        return new IdentityResponse(identity.accountId(), identity.displayName(), identity.publicKey(), identity.recoveryBundle());
     }
 
     @GetMapping("/api/identity/me")
     public IdentityResponse currentIdentity(HttpServletRequest request) {
         Identity identity = requireIdentity(request);
-        return new IdentityResponse(identity.accountId(), identity.publicKey(), identity.recoveryBundle());
+        return new IdentityResponse(identity.accountId(), identity.displayName(), identity.publicKey(), identity.recoveryBundle());
     }
 
     @PostMapping("/api/auth/logout")
@@ -95,16 +95,19 @@ public final class ChatServer {
         if (text.length() > 2000) {
             throw badRequest("Messages cannot exceed 2000 characters");
         }
-        Message message = new Message(identity.accountId(), identity.accountId(), text,
+        Message message = new Message(identity.accountId(), identity.displayName(), text,
                 LocalTime.now().format(TIME_FORMAT), true);
         messages.add(message);
         return message;
     }
 
     private void validateRegistration(RegisterRequest request) {
-        if (request == null || blank(request.accountId()) || blank(request.publicKey())
+        if (request == null || blank(request.accountId()) || blank(request.displayName()) || blank(request.publicKey())
                 || blank(request.recoveryBundle())) {
             throw badRequest("Generated identity data is incomplete");
+        }
+        if (request.displayName().trim().length() > 40) {
+            throw badRequest("Display name cannot exceed 40 characters");
         }
         if (!request.accountId().matches("[a-f0-9]{32}")) {
             throw badRequest("Invalid account ID");
@@ -151,10 +154,10 @@ public final class ChatServer {
         return new ResponseStatusException(HttpStatus.BAD_REQUEST, message);
     }
 
-    private record Identity(String accountId, String publicKey, String recoveryBundle) {}
-    public record RegisterRequest(String accountId, String publicKey, String recoveryBundle) {}
+    private record Identity(String accountId, String displayName, String publicKey, String recoveryBundle) {}
+    public record RegisterRequest(String accountId, String displayName, String publicKey, String recoveryBundle) {}
     public record RestoreRequest(String accountId) {}
-    public record IdentityResponse(String accountId, String publicKey, String recoveryBundle) {}
+    public record IdentityResponse(String accountId, String displayName, String publicKey, String recoveryBundle) {}
     public record MessageRequest(String text) {}
     public record Message(String accountId, String name, String text, String time, boolean mine) {}
 }

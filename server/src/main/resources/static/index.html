@@ -15,7 +15,7 @@
       <h1 id="auth-title">Create an anonymous identity</h1>
       <p class="auth-subtitle">No email. No phone number. Your recovery phrase is the only way to restore this identity.</p>
       <form id="auth-form">
-        <label id="name-field" hidden>Display name<input name="name" autocomplete="off" placeholder="Optional"></label>
+        <label id="name-field">Your display name<input id="display-name-input" name="name" autocomplete="off" placeholder="e.g. Luna" maxlength="40" required></label>
         <label id="account-id-field" hidden>Account ID<input id="account-id-input" name="accountId" autocomplete="off" placeholder="Paste your 32-character ID"></label>
         <button id="auth-submit" class="auth-submit" type="submit">Generate identity</button>
         <p id="auth-error" class="auth-error" role="alert"></p>

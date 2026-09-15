@@ -5,8 +5,10 @@ const authError = document.querySelector('#auth-error');
 const authSwitch = document.querySelector('#auth-switch');
 const authTitle = document.querySelector('#auth-title');
 const authPrompt = document.querySelector('#auth-prompt');
+const accountIdField = document.querySelector('#account-id-field');
 const accountIdInput = document.querySelector('#account-id-input');
 const nameField = document.querySelector('#name-field');
+const displayNameInput = document.querySelector('#display-name-input');
 const messages = document.querySelector('#messages');
 const form = document.querySelector('#message-form');
 const input = document.querySelector('#message-input');
@@ -79,7 +81,7 @@ function createRecoveryPhrase() {
   return [...random].map((byte) => WORDS[byte % WORDS.length]).join(' ');
 }
 
-async function createIdentity() {
+async function createIdentity(displayName) {
   const keyPair = await crypto.subtle.generateKey({ name: 'ECDH', namedCurve: 'P-256' }, true, ['deriveKey', 'deriveBits']);
   const publicKey = await crypto.subtle.exportKey('jwk', keyPair.publicKey);
   const privateKey = await crypto.subtle.exportKey('jwk', keyPair.privateKey);
@@ -87,6 +89,7 @@ async function createIdentity() {
   const publicKeyJson = JSON.stringify(publicKey);
   const identity = {
     accountId: await sha256Hex(publicKeyJson),
+    displayName,
     publicKey: publicKeyJson,
     recoveryBundle: await encryptBundle({ privateKey, publicKey }, phrase)
   };
@@ -119,7 +122,7 @@ async function loadMessages(scroll = false) {
 function showApp(identity) {
   currentIdentity = identity;
   const shortId = identity.accountId.slice(0, 8);
-  profileName.textContent = `anon-${shortId}`;
+  profileName.textContent = identity.displayName || `anon-${shortId}`;
   profileEmail.textContent = identity.accountId;
   authScreen.hidden = true;
   appShell.hidden = false;
@@ -139,8 +142,9 @@ function updateAuthMode() {
   authTitle.textContent = restoreMode ? 'Restore your identity' : 'Create an anonymous identity';
   authPrompt.textContent = restoreMode ? 'Need a new identity?' : 'Already have an identity?';
   authSwitch.textContent = restoreMode ? 'Create one' : 'Restore it';
-  nameField.hidden = true;
-  accountIdInput.hidden = !restoreMode;
+  nameField.hidden = restoreMode;
+  displayNameInput.required = !restoreMode;
+  accountIdField.hidden = !restoreMode;
   authForm.querySelector('button[type="submit"]').textContent = restoreMode ? 'Restore identity' : 'Generate identity';
   authError.textContent = '';
 }
@@ -151,7 +155,9 @@ authForm.addEventListener('submit', async (event) => {
   authError.textContent = '';
   try {
     if (!restoreMode) {
-      generatedIdentity = await createIdentity();
+      const displayName = displayNameInput.value.trim();
+      if (!displayName) throw new Error('Enter a display name');
+      generatedIdentity = await createIdentity(displayName);
       const registered = await api('/api/identity/register', { method: 'POST', body: JSON.stringify(generatedIdentity.identity) });
       recoveryPhrase.textContent = generatedIdentity.phrase;
       recoveryDialog.showModal();
