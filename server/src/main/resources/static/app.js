@@ -1,15 +1,21 @@
+const authScreen = document.querySelector('#auth-screen');
+const appShell = document.querySelector('#app-shell');
+const authForm = document.querySelector('#auth-form');
+const authSubmit = document.querySelector('#auth-submit');
+const authError = document.querySelector('#auth-error');
+const authSwitch = document.querySelector('#auth-switch');
+const authTitle = document.querySelector('#auth-title');
+const authPrompt = document.querySelector('#auth-prompt');
+const nameField = document.querySelector('#name-field');
 const messages = document.querySelector('#messages');
 const form = document.querySelector('#message-form');
 const input = document.querySelector('#message-input');
-
-function renderMessage(message) {
-  const row = document.createElement('article');
-  const name = (message?.name ?? 'You').trim() || 'You';
-  const text = (message?.text ?? '').trim();
-  row.className = `message-row${message?.mine ? ' mine' : ''}`;
-  row.innerHTML = `<div class="avatar ${message?.mine ? 'avatar-you' : 'avatar-maya'}">${escapeHtml(name[0] || 'Y')}</div><div class="message"><div class="message-meta"><strong>${escapeHtml(name)}</strong><time>${escapeHtml(message?.time ?? 'now')}</time></div><p class="message-text">${escapeHtml(text)}</p></div>`;
-  messages.append(row);
-}
+const profileName = document.querySelector('#profile-name');
+const profileEmail = document.querySelector('#profile-email');
+const logoutButton = document.querySelector('#logout-button');
+let signupMode = true;
+let currentUser;
+let pollTimer;
 
 function escapeHtml(value) {
   const element = document.createElement('span');
@@ -17,16 +23,78 @@ function escapeHtml(value) {
   return element.innerHTML;
 }
 
-async function loadMessages() {
-  try {
-    const response = await fetch('/api/messages');
-    if (!response.ok) throw new Error('Unable to load messages');
-    (await response.json()).forEach(renderMessage);
-    messages.scrollTop = messages.scrollHeight;
-  } catch (error) {
-    renderMessage({ name: 'Gather', text: 'The server is offline. Start ChatServer.java to connect.', time: 'now', mine: false });
-  }
+function renderMessage(message) {
+  const row = document.createElement('article');
+  const name = (message?.name ?? 'Unknown').trim() || 'Unknown';
+  const text = (message?.text ?? '').trim();
+  row.className = `message-row${message?.mine ? ' mine' : ''}`;
+  const avatarClass = message?.mine ? 'avatar-you' : 'avatar-maya';
+  row.innerHTML = `<div class="avatar ${avatarClass}">${escapeHtml(name[0].toUpperCase())}</div><div class="message"><div class="message-meta"><strong>${escapeHtml(name)}</strong><time>${escapeHtml(message?.time ?? 'now')}</time></div><p class="message-text">${escapeHtml(text)}</p></div>`;
+  messages.append(row);
 }
+
+async function api(path, options = {}) {
+  const response = await fetch(path, { ...options, headers: { 'Content-Type': 'application/json', ...(options.headers || {}) } });
+  let body = null;
+  try { body = await response.json(); } catch (_) {}
+  if (!response.ok) throw new Error(body?.message || 'Something went wrong');
+  return body;
+}
+
+async function loadMessages(scroll = false) {
+  const data = await api('/api/messages');
+  messages.replaceChildren();
+  data.forEach(renderMessage);
+  if (scroll) messages.scrollTop = messages.scrollHeight;
+}
+
+function showApp(user) {
+  currentUser = user;
+  profileName.textContent = user.name;
+  profileEmail.textContent = user.email;
+  authScreen.hidden = true;
+  appShell.hidden = false;
+  loadMessages(true);
+  clearInterval(pollTimer);
+  pollTimer = setInterval(() => loadMessages(false).catch(() => {}), 2000);
+}
+
+function showAuth() {
+  clearInterval(pollTimer);
+  appShell.hidden = true;
+  authScreen.hidden = false;
+}
+
+function updateAuthMode() {
+  signupMode = !signupMode;
+  authTitle.textContent = signupMode ? 'Create your account' : 'Welcome back';
+  authSubmit.textContent = signupMode ? 'Sign up' : 'Log in';
+  authPrompt.textContent = signupMode ? 'Already have an account?' : 'Need an account?';
+  authSwitch.textContent = signupMode ? 'Log in' : 'Sign up';
+  nameField.hidden = !signupMode;
+  authError.textContent = '';
+}
+
+authSwitch.addEventListener('click', updateAuthMode);
+authForm.addEventListener('submit', async (event) => {
+  event.preventDefault();
+  authError.textContent = '';
+  const formData = new FormData(authForm);
+  const payload = signupMode
+    ? { name: formData.get('name'), email: formData.get('email'), password: formData.get('password') }
+    : { email: formData.get('email'), password: formData.get('password') };
+  try {
+    showApp(await api(signupMode ? '/api/auth/signup' : '/api/auth/login', { method: 'POST', body: JSON.stringify(payload) }));
+    authForm.reset();
+  } catch (error) {
+    authError.textContent = error.message;
+  }
+});
+
+logoutButton.addEventListener('click', async () => {
+  await api('/api/auth/logout', { method: 'POST' }).catch(() => {});
+  showAuth();
+});
 
 form.addEventListener('submit', async (event) => {
   event.preventDefault();
@@ -34,17 +102,15 @@ form.addEventListener('submit', async (event) => {
   if (!text) return;
   input.value = '';
   try {
-    const response = await fetch('/api/messages', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ name: 'You', text }) });
-    if (!response.ok) throw new Error('Unable to send message');
-    renderMessage(await response.json());
+    await api('/api/messages', { method: 'POST', body: JSON.stringify({ text }) });
+    await loadMessages(true);
   } catch (error) {
-    renderMessage({ name: 'You', text, time: 'local', mine: true });
+    input.value = text;
   }
-  messages.scrollTop = messages.scrollHeight;
 });
 
 input.addEventListener('keydown', (event) => {
   if (event.key === 'Enter' && !event.shiftKey) form.requestSubmit();
 });
 
-loadMessages();
+api('/api/auth/me').then(showApp).catch(showAuth);

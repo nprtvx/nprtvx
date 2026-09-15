@@ -8,7 +8,23 @@
   <link rel="stylesheet" href="/style.css">
 </head>
 <body>
-  <main class="app-shell">
+  <section id="auth-screen" class="auth-screen">
+    <div class="auth-card">
+      <div class="brand auth-brand"><span class="brand-mark">g</span><span>gather</span></div>
+      <p class="eyebrow">TEAM CHAT</p>
+      <h1 id="auth-title">Create your account</h1>
+      <p class="auth-subtitle">Join your workspace and start a conversation.</p>
+      <form id="auth-form">
+        <label id="name-field">Your name<input name="name" autocomplete="name" placeholder="Alex Johnson" required></label>
+        <label>Email<input name="email" type="email" autocomplete="email" placeholder="you@example.com" required></label>
+        <label>Password<input name="password" type="password" autocomplete="current-password" placeholder="At least 6 characters" minlength="6" required></label>
+        <button id="auth-submit" class="auth-submit" type="submit">Sign up</button>
+        <p id="auth-error" class="auth-error" role="alert"></p>
+      </form>
+      <p class="auth-switch"><span id="auth-prompt">Already have an account?</span> <button id="auth-switch" type="button">Log in</button></p>
+    </div>
+  </section>
+  <main id="app-shell" class="app-shell" hidden>
     <aside class="sidebar">
       <div class="brand"><span class="brand-mark">g</span><span>gather</span></div>
       <div class="workspace-label">Workspace <button class="icon-button" aria-label="Workspace menu">⌄</button></div>
@@ -23,7 +39,7 @@
         <button class="channel"><i>#</i> design-critique</button>
         <button class="channel"><i>#</i> off-topic</button>
       </nav>
-      <div class="sidebar-footer"><div class="avatar avatar-you">Y</div><div><strong>Your profile</strong><small>Available</small></div><button class="more-button" aria-label="Profile menu">···</button></div>
+      <div class="sidebar-footer"><div class="avatar avatar-you">Y</div><div><strong id="profile-name">Your profile</strong><small id="profile-email">Available</small></div><button id="logout-button" class="more-button" type="button">Log out</button></div>
     </aside>
     <section class="chat-panel">
       <header class="chat-header"><div><p class="eyebrow">CHANNEL</p><h1><span>#</span> project-lounge</h1><p class="subtitle">A space for ideas, updates, and good questions.</p></div><div class="header-actions"><button class="round-button" aria-label="Start call">⌁</button><button class="round-button" aria-label="Channel details">ⓘ</button><div class="member-stack"><span class="avatar avatar-maya">M</span><span class="avatar avatar-jules">J</span><span class="avatar avatar-lee">L</span><span class="member-count">+8</span></div></div></header>
