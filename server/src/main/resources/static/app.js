@@ -23,10 +23,20 @@ const conversationName = document.querySelector('#conversation-name');
 const recoveryDialog = document.querySelector('#recovery-dialog');
 const recoveryPhrase = document.querySelector('#recovery-phrase');
 const recoveryCopy = document.querySelector('#recovery-copy');
+const recoveryContinue = document.querySelector('#recovery-continue');
 let restoreMode = false;
 let currentIdentity;
 let pollTimer;
 let generatedIdentity;
+
+function waitForRecoveryConfirmation() {
+  return new Promise((resolve) => {
+    recoveryContinue.addEventListener('click', () => {
+      recoveryDialog.close();
+      resolve();
+    }, { once: true });
+  });
+}
 let currentPrivateKey;
 let currentRecipient;
 let currentRecipientKey;
@@ -222,7 +232,9 @@ authForm.addEventListener('submit', async (event) => {
       currentPrivateKey = await importPrivateKey((await decryptBundle(generatedIdentity.identity.recoveryBundle, generatedIdentity.phrase)).privateKey);
       const registered = await api('/api/identity/register', { method: 'POST', body: JSON.stringify(generatedIdentity.identity) });
       recoveryPhrase.textContent = generatedIdentity.phrase;
+      recoveryCopy.textContent = 'Copy phrase';
       recoveryDialog.showModal();
+      await waitForRecoveryConfirmation();
       showApp(registered);
     } else {
       const response = await api('/api/identity/restore', { method: 'POST', body: JSON.stringify({ accountId: accountIdInput.value.trim().toLowerCase() }) });
