@@ -627,7 +627,12 @@ attachmentInput.addEventListener('change', async () => {
 
 api('/api/identity/me')
   .then(async (identity) => {
-    await restoreSessionPrivateKey();
+    const hasPrivateKey = await restoreSessionPrivateKey();
+    if (!hasPrivateKey) {
+      showAuth();
+      navigate('/restore');
+      return;
+    }
     showApp(identity, window.location.pathname);
   })
   .catch(() => {
