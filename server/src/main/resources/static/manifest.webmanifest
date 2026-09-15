@@ -1,0 +1,10 @@
+{
+  "name": "NeonMonkey",
+  "short_name": "NeonMonkey",
+  "description": "Private end-to-end encrypted messaging",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#ddd8ce",
+  "theme_color": "#e86853",
+  "icons": []
+}

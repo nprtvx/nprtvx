@@ -4,6 +4,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <meta name="theme-color" content="#f4f0e8">
+  <link rel="manifest" href="/manifest.webmanifest">
   <title>Gather | Team chat</title>
   <link rel="stylesheet" href="/style.css">
 </head>
@@ -68,5 +69,8 @@
     <aside class="details-panel"><div class="details-top"><span>About this channel</span><button class="close-details" aria-label="Close details">×</button></div><div class="channel-illustration">✦</div><h2>project-lounge</h2><p class="details-copy">The informal corner of Gather. Bring work in progress, tiny wins, and anything worth sharing.</p><div class="detail-section"><p class="section-label">Pinned note</p><div class="note"><span>✦</span><p>Demo day is Friday at 4:00 PM.<br><small>Added by Maya · yesterday</small></p></div></div><div class="detail-section"><p class="section-label">People <span>11 members</span></p><div class="people"><div class="person"><span class="avatar avatar-maya">M</span><span><strong>Maya Chen</strong><small>Workspace admin</small></span><i class="status"></i></div><div class="person"><span class="avatar avatar-jules">J</span><span><strong>Jules Park</strong><small>Product designer</small></span><i class="status"></i></div><div class="person"><span class="avatar avatar-lee">L</span><span><strong>Lee Robinson</strong><small>Engineer</small></span><i class="status away"></i></div></div></div></aside>
   </main>
   <script src="/app.js"></script>
+  <script>
+    if ('serviceWorker' in navigator) navigator.serviceWorker.register('/sw.js');
+  </script>
 </body>
 </html>
