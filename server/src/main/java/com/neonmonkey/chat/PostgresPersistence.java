@@ -18,6 +18,12 @@ public final class PostgresPersistence {
 
     public PostgresPersistence() {
         String configuredUrl = firstNonBlank(System.getenv("JDBC_DATABASE_URL"), System.getenv("DATABASE_URL"));
+        if (configuredUrl == null && System.getenv("DATABASE_HOST") != null) {
+            configuredUrl = "jdbc:postgresql://" + System.getenv("DATABASE_HOST") + ":"
+                    + valueOrDefault("DATABASE_PORT", "5432") + "/" + valueOrDefault("DATABASE_NAME", "neonmonkey")
+                    + "?user=" + valueOrDefault("DATABASE_USER", "neonmonkey")
+                    + "&" + "password" + "=" + urlEncode(valueOrDefault("DATABASE_PASSWORD", ""));
+        }
         if (configuredUrl == null) {
             enabled = false;
             jdbcUrl = null;
@@ -52,6 +58,24 @@ public final class PostgresPersistence {
                     encrypted_recovery_bundle = EXCLUDED.encrypted_recovery_bundle,
                     last_seen_at = CURRENT_TIMESTAMP
                 """, identity.accountId(), identity.displayName(), json(identity.publicKey()), json(identity.recoveryBundle()));
+    }
+
+    public ChatServer.Identity findIdentity(String accountId) {
+        if (!enabled) return null;
+        try (Connection connection = connection();
+             PreparedStatement statement = connection.prepareStatement("""
+                     SELECT trim(account_id), display_name, public_key::text, encrypted_recovery_bundle::text
+                     FROM identities WHERE trim(account_id) = ?
+                     """)) {
+            statement.setString(1, accountId);
+            try (ResultSet rows = statement.executeQuery()) {
+                if (!rows.next()) return null;
+                return new ChatServer.Identity(rows.getString(1), rows.getString(2),
+                        readJsonString(rows.getString(3)), readJsonString(rows.getString(4)));
+            }
+        } catch (SQLException exception) {
+            throw databaseFailure("Could not load recipient identity", exception);
+        }
     }
 
     public void saveSession(String token, String accountId, long expiresAt) {
@@ -331,6 +355,15 @@ public final class PostgresPersistence {
 
     private static String firstNonBlank(String first, String second) {
         return first != null && !first.isBlank() ? first : (second != null && !second.isBlank() ? second : null);
+    }
+
+    private static String valueOrDefault(String name, String fallback) {
+        String value = System.getenv(name);
+        return value == null || value.isBlank() ? fallback : value;
+    }
+
+    private static String urlEncode(String value) {
+        return java.net.URLEncoder.encode(value, StandardCharsets.UTF_8);
     }
 
     private static IllegalStateException databaseFailure(String message, Exception cause) {

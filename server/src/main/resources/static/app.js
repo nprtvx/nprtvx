@@ -524,7 +524,7 @@ recipientForm.addEventListener('submit', async (event) => {
     await openDirectChat(accountId);
   } catch (error) {
     recipientError.textContent = error.message === 'Request failed (404)'
-      ? 'Recipient not found. Ask them to create or restore their account first.'
+      ? 'Recipient ID was not found on this NeonMonkey server. Confirm the ID and ask the recipient to create or restore the account here.'
       : error.message;
   }
 });

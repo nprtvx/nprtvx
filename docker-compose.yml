@@ -21,9 +21,11 @@ services:
       postgres:
         condition: service_healthy
     environment:
-      DATABASE_URL: jdbc:postgresql://postgres:5432/${POSTGRES_DB:-neonmonkey}
-      PGUSER: ${POSTGRES_USER:-neonmonkey}
-      PGPASSWORD: ${POSTGRES_PASSWORD:-neonmonkey_dev_password}
+      DATABASE_HOST: postgres
+      DATABASE_PORT: "5432"
+      DATABASE_NAME: ${POSTGRES_DB:-neonmonkey}
+      DATABASE_USER: ${POSTGRES_USER:-neonmonkey}
+      DATABASE_PASSWORD: ${POSTGRES_PASSWORD:-neonmonkey_dev_password}
     ports:
       - "${APP_PORT:-8080}:8080"
 

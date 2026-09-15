@@ -123,6 +123,9 @@ Set `POSTGRES_DB`, `POSTGRES_USER`, `POSTGRES_PASSWORD`, or `APP_PORT` in a `.en
 file to override the development defaults. Do not use the default password in a
 public deployment.
 
+The app container receives the PostgreSQL username and password in its JDBC
+connection string; no separate `PGPASSWORD` setting is required.
+
 The application still needs an independent cryptographic audit before the custom browser
 protocol should be considered production-grade. Native iOS and Android clients remain
 separate client projects; the shared protocol and installable PWA are included here.

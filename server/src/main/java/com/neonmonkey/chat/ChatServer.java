@@ -116,10 +116,15 @@ public final class ChatServer {
     @GetMapping("/api/identity/{accountId}")
     public PublicIdentity findIdentity(@PathVariable String accountId, HttpServletRequest request) {
         requireIdentity(request);
-        Identity identity = identities.get(accountId.toLowerCase(Locale.ROOT));
+        String normalizedAccountId = accountId.trim().toLowerCase(Locale.ROOT);
+        Identity identity = identities.get(normalizedAccountId);
+        if (identity == null) {
+            identity = persistence.findIdentity(normalizedAccountId);
+            if (identity != null) identities.put(normalizedAccountId, identity);
+        }
         if (identity == null) {
             throw new ResponseStatusException(HttpStatus.NOT_FOUND,
-                    "Recipient not found. Ask them to create or restore their account first.");
+                    "Recipient ID not found in this NeonMonkey server. Confirm the ID and make sure the recipient has created or restored the account here.");
         }
         return new PublicIdentity(identity.accountId(), identity.displayName(), identity.publicKey());
     }
