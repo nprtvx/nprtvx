@@ -287,7 +287,11 @@ async function loadMessages(scroll = false) {
 
 function navigate(path) {
   history.pushState({}, '', path);
-  renderRoute(path);
+  if (currentIdentity) {
+    renderRoute(path);
+  } else {
+    renderAuthRoute(path);
+  }
 }
 
 function renderRoute(path = window.location.pathname) {
@@ -303,6 +307,9 @@ function renderRoute(path = window.location.pathname) {
 
 function showApp(identity, path = '/messages') {
   currentIdentity = identity;
+  if (window.location.pathname !== path) {
+    history.replaceState({}, '', path);
+  }
   const shortId = identity.accountId.slice(0, 8);
   profileName.textContent = identity.displayName || `anon-${shortId}`;
   profileEmail.textContent = identity.accountId;
@@ -353,12 +360,28 @@ async function openDirectChat(accountId) {
 
 function showAuth() {
   clearInterval(pollTimer);
+  currentIdentity = undefined;
+  currentPrivateKey = undefined;
+  currentRecipient = undefined;
+  currentRecipientKey = undefined;
+  currentGroup = undefined;
+  currentGroupKey = undefined;
   appShell.hidden = true;
   authScreen.hidden = false;
   landingActions.hidden = false;
   authFormPanel.hidden = true;
   authForm.reset();
   recoveryInput.value = '';
+  renderAuthRoute(window.location.pathname);
+}
+
+function renderAuthRoute(path = window.location.pathname) {
+  if (path === '/create' || path === '/restore') {
+    openAuth(path === '/restore' ? 'restore' : 'create');
+  } else {
+    landingActions.hidden = false;
+    authFormPanel.hidden = true;
+  }
 }
 
 function openAuth(mode) {
@@ -374,9 +397,9 @@ function openAuth(mode) {
   authError.textContent = '';
 }
 
-createAccountButton.addEventListener('click', () => openAuth('create'));
-restoreAccountButton.addEventListener('click', () => openAuth('restore'));
-backToLanding.addEventListener('click', showAuth);
+createAccountButton.addEventListener('click', () => navigate('/create'));
+restoreAccountButton.addEventListener('click', () => navigate('/restore'));
+backToLanding.addEventListener('click', () => navigate('/'));
 authForm.addEventListener('submit', async (event) => {
   event.preventDefault();
   authError.textContent = '';
@@ -446,7 +469,9 @@ recipientForm.addEventListener('submit', async (event) => {
   try {
     await openDirectChat(accountId);
   } catch (error) {
-    recipientError.textContent = error.message;
+    recipientError.textContent = error.message === 'Request failed (404)'
+      ? 'Recipient not found. Ask them to create or restore their account first.'
+      : error.message;
   }
 });
 
@@ -467,7 +492,13 @@ messagesTab.addEventListener('click', showMessagesTab);
 settingsTab.addEventListener('click', showSettingsTab);
 messagesTab.addEventListener('click', () => navigate('/messages'));
 settingsTab.addEventListener('click', () => navigate('/settings'));
-window.addEventListener('popstate', () => renderRoute());
+window.addEventListener('popstate', () => {
+  if (currentIdentity) {
+    renderRoute();
+  } else {
+    renderAuthRoute();
+  }
+});
 settingsLock.addEventListener('click', async () => {
   await api('/api/auth/logout', { method: 'POST' }).catch(() => {});
   showAuth();
@@ -539,4 +570,9 @@ attachmentInput.addEventListener('change', async () => {
   }
 });
 
-api('/api/identity/me').then((identity) => showApp(identity, window.location.pathname)).catch(showAuth);
+api('/api/identity/me')
+  .then((identity) => showApp(identity, window.location.pathname))
+  .catch(() => {
+    showAuth();
+    renderAuthRoute();
+  });

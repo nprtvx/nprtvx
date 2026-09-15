@@ -44,7 +44,7 @@ public final class ChatServer {
         return Map.of("status", "ok");
     }
 
-    @GetMapping({"/messages", "/settings"})
+    @GetMapping({"/", "/create", "/restore", "/messages", "/settings"})
     public String appRoute() {
         return "forward:/index.html";
     }
@@ -95,7 +95,8 @@ public final class ChatServer {
         requireIdentity(request);
         Identity identity = identities.get(accountId.toLowerCase(Locale.ROOT));
         if (identity == null) {
-            throw new ResponseStatusException(HttpStatus.NOT_FOUND, "Identity not found");
+            throw new ResponseStatusException(HttpStatus.NOT_FOUND,
+                    "Recipient not found. Ask them to create or restore their account first.");
         }
         return new PublicIdentity(identity.accountId(), identity.displayName(), identity.publicKey());
     }
