@@ -1,6 +1,6 @@
-# Gather Chat
+# NeonMonkey
 
-A small Spring Boot web chat app for a polished static team chat interface. Messages are stored in memory for the life of the server.
+NeonMonkey is being rebuilt as a privacy-first messaging service. The release is being delivered in pieces so each security-sensitive layer can be reviewed before the final release.
 
 ## Run
 
@@ -11,6 +11,29 @@ mvn spring-boot:run
 ```
 
 Open http://localhost:8080.
+
+## Current piece: anonymous identities
+
+The first piece removes email and phone signup:
+
+- The browser generates an ECDH identity key pair.
+- The server receives the public key and an account ID derived from it.
+- The private key is encrypted in the browser with a recovery phrase before upload.
+- The server stores only the public identity and encrypted recovery bundle.
+- The recovery phrase is shown once and cannot be recovered by NeonMonkey.
+
+The message transport is still the legacy plaintext placeholder at this stage. It must not be treated as end-to-end encrypted until the encrypted message transport piece is deployed.
+
+## Release pieces
+
+1. Anonymous identity and recovery phrase (current)
+2. Encrypted one-to-one messaging
+3. Encrypted group conversations
+4. Disappearing messages
+5. Encrypted attachments
+6. Emoji and privacy-preserving GIF integrations
+7. iOS and Android clients
+8. Security review and final release
 
 ## Deploy on Render
 
