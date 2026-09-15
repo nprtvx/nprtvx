@@ -5,8 +5,8 @@ const authError = document.querySelector('#auth-error');
 const authSwitch = document.querySelector('#auth-switch');
 const authTitle = document.querySelector('#auth-title');
 const authPrompt = document.querySelector('#auth-prompt');
-const accountIdField = document.querySelector('#account-id-field');
-const accountIdInput = document.querySelector('#account-id-input');
+const recoveryField = document.querySelector('#recovery-field');
+const recoveryInput = document.querySelector('#recovery-input');
 const nameField = document.querySelector('#name-field');
 const displayNameInput = document.querySelector('#display-name-input');
 const messages = document.querySelector('#messages');
@@ -22,12 +22,14 @@ const logoutButton = document.querySelector('#logout-button');
 const recipientForm = document.querySelector('#recipient-form');
 const recipientInput = document.querySelector('#recipient-input');
 const recipientError = document.querySelector('#recipient-error');
-const recipientLabel = document.querySelector('#recipient-label');
-const conversationName = document.querySelector('#conversation-name');
-const groupForm = document.querySelector('#group-form');
-const groupNameInput = document.querySelector('#group-name-input');
-const groupMembersInput = document.querySelector('#group-members-input');
-const groupError = document.querySelector('#group-error');
+const chatList = document.querySelector('#chat-list');
+const messagesTab = document.querySelector('#messages-tab');
+const settingsTab = document.querySelector('#settings-tab');
+const settingsPanel = document.querySelector('#settings-panel');
+const settingsName = document.querySelector('#settings-name');
+const settingsAccountId = document.querySelector('#settings-account-id');
+const settingsLock = document.querySelector('#settings-lock');
+const homeEmpty = document.querySelector('#home-empty');
 const recoveryDialog = document.querySelector('#recovery-dialog');
 const recoveryAccountId = document.querySelector('#recovery-account-id');
 const recoveryPhrase = document.querySelector('#recovery-phrase');
@@ -283,11 +285,49 @@ function showApp(identity) {
   const shortId = identity.accountId.slice(0, 8);
   profileName.textContent = identity.displayName || `anon-${shortId}`;
   profileEmail.textContent = identity.accountId;
+  settingsName.textContent = identity.displayName;
+  settingsAccountId.textContent = identity.accountId;
   authScreen.hidden = true;
   appShell.hidden = false;
+  showMessagesTab();
+  renderRecentChats();
   loadMessages(true).catch(() => {});
   clearInterval(pollTimer);
   pollTimer = setInterval(() => loadMessages(false).catch(() => {}), 2000);
+}
+
+function renderRecentChats() {
+  const chats = JSON.parse(localStorage.getItem('neonmonkey_chats') || '[]');
+  chatList.replaceChildren();
+  if (!chats.length) {
+    chatList.innerHTML = '<button class="channel empty-chat" type="button"><i>↗</i> No chats yet</button>';
+    return;
+  }
+  chats.forEach((chat) => {
+    const button = document.createElement('button');
+    button.className = 'channel';
+    button.type = 'button';
+    button.innerHTML = `<i>↗</i> ${escapeHtml(chat.name)}`;
+    button.addEventListener('click', () => openDirectChat(chat.accountId).catch(() => {}));
+    chatList.append(button);
+  });
+}
+
+async function openDirectChat(accountId) {
+  const recipient = await api(`/api/identity/${accountId}`);
+  currentRecipient = recipient;
+  currentGroup = null;
+  currentGroupKey = null;
+  currentRecipientKey = await importPublicKey(JSON.parse(recipient.publicKey));
+  input.disabled = false;
+  input.placeholder = `Message ${recipient.displayName}`;
+  homeEmpty.hidden = true;
+  const chats = JSON.parse(localStorage.getItem('neonmonkey_chats') || '[]')
+    .filter((chat) => chat.accountId !== recipient.accountId);
+  chats.unshift({ accountId: recipient.accountId, name: recipient.displayName });
+  localStorage.setItem('neonmonkey_chats', JSON.stringify(chats.slice(0, 50)));
+  renderRecentChats();
+  await loadMessages(true);
 }
 
 function showAuth() {
@@ -298,13 +338,14 @@ function showAuth() {
 
 function updateAuthMode() {
   restoreMode = !restoreMode;
-  authTitle.textContent = restoreMode ? 'Restore your identity' : 'Create an anonymous identity';
-  authPrompt.textContent = restoreMode ? 'Need a new identity?' : 'Already have an identity?';
-  authSwitch.textContent = restoreMode ? 'Create one' : 'Restore it';
+  authTitle.textContent = restoreMode ? 'Log in to NeonMonkey' : 'Create an account';
+  authPrompt.textContent = restoreMode ? 'New to NeonMonkey?' : 'Already have an account?';
+  authSwitch.textContent = restoreMode ? 'Create account' : 'Log in';
   nameField.hidden = restoreMode;
   displayNameInput.required = !restoreMode;
-  accountIdField.hidden = !restoreMode;
-  authForm.querySelector('button[type="submit"]').textContent = restoreMode ? 'Restore identity' : 'Generate identity';
+  recoveryField.hidden = !restoreMode;
+  recoveryInput.required = restoreMode;
+  authForm.querySelector('button[type="submit"]').textContent = restoreMode ? 'Log in' : 'Create account';
   authError.textContent = '';
 }
 
@@ -319,6 +360,11 @@ authForm.addEventListener('submit', async (event) => {
       generatedIdentity = await createIdentity(displayName);
       currentPrivateKey = await importPrivateKey((await decryptBundle(generatedIdentity.identity.recoveryBundle, generatedIdentity.phrase)).privateKey);
       const registered = await api('/api/identity/register', { method: 'POST', body: JSON.stringify(generatedIdentity.identity) });
+      localStorage.setItem('neonmonkey_identity', JSON.stringify({
+        accountId: registered.accountId,
+        recoveryBundle: registered.recoveryBundle,
+        displayName: registered.displayName
+      }));
       recoveryAccountId.textContent = registered.accountId;
       recoveryPhrase.textContent = generatedIdentity.phrase;
       recoveryIdCopy.textContent = 'Copy account ID';
@@ -327,8 +373,10 @@ authForm.addEventListener('submit', async (event) => {
       await waitForRecoveryConfirmation();
       showApp(registered);
     } else {
-      const response = await api('/api/identity/restore', { method: 'POST', body: JSON.stringify({ accountId: accountIdInput.value.trim().toLowerCase() }) });
-      const bundle = await decryptBundle(response.recoveryBundle, prompt('Enter your recovery phrase') || '');
+      const saved = JSON.parse(localStorage.getItem('neonmonkey_identity') || 'null');
+      if (!saved?.accountId) throw new Error('This device has no saved NeonMonkey identity. Restore it on the device where you created it.');
+      const response = await api('/api/identity/restore', { method: 'POST', body: JSON.stringify({ accountId: saved.accountId }) });
+      const bundle = await decryptBundle(response.recoveryBundle, recoveryInput.value.trim());
       currentPrivateKey = await importPrivateKey(bundle.privateKey);
       showApp(response);
     }
@@ -346,49 +394,30 @@ recipientForm.addEventListener('submit', async (event) => {
     return;
   }
   try {
-    const recipient = await api(`/api/identity/${accountId}`);
-    currentRecipient = recipient;
-    currentGroup = null;
-    currentGroupKey = null;
-    currentRecipientKey = await importPublicKey(JSON.parse(recipient.publicKey));
-    recipientLabel.innerHTML = `<i>↗</i> ${escapeHtml(recipient.displayName)}`;
-    conversationName.textContent = recipient.displayName;
-    input.disabled = false;
-    input.placeholder = `Message ${recipient.displayName}`;
-    await loadMessages(true);
+    await openDirectChat(accountId);
   } catch (error) {
     recipientError.textContent = error.message;
   }
 });
 
-groupForm.addEventListener('submit', async (event) => {
-  event.preventDefault();
-  groupError.textContent = '';
-  try {
-    const memberIds = [...new Set(groupMembersInput.value.split(',').map((value) => value.trim().toLowerCase()).filter(Boolean))];
-    if (memberIds.some((id) => !/^[a-f0-9]{32}$/.test(id))) throw new Error('Every member ID must be 32 hexadecimal characters.');
-    if (!memberIds.includes(currentIdentity.accountId)) memberIds.push(currentIdentity.accountId);
-    const groupKey = await crypto.subtle.generateKey({ name: 'AES-GCM', length: 256 }, true, ['encrypt', 'decrypt']);
-    const memberKeys = {};
-    for (const accountId of memberIds) {
-      const member = accountId === currentIdentity.accountId
-        ? currentIdentity
-        : await api(`/api/identity/${accountId}`);
-      memberKeys[accountId] = await wrapGroupKey(groupKey, await importPublicKey(JSON.parse(member.publicKey)));
-    }
-    const group = await api('/api/groups', { method: 'POST', body: JSON.stringify({ name: groupNameInput.value.trim(), memberKeys }) });
-    currentGroup = group;
-    currentGroupKey = groupKey;
-    currentRecipient = null;
-    currentRecipientKey = null;
-    recipientLabel.innerHTML = `<i>◆</i> ${escapeHtml(group.name)}`;
-    conversationName.textContent = group.name;
-    input.disabled = false;
-    input.placeholder = `Message ${group.name}`;
-    await loadMessages(true);
-  } catch (error) {
-    groupError.textContent = error.message;
-  }
+function showMessagesTab() {
+  messagesTab.classList.add('active');
+  settingsTab.classList.remove('active');
+  settingsPanel.hidden = true;
+  homeEmpty.hidden = Boolean(currentRecipient || currentGroup);
+}
+
+function showSettingsTab() {
+  settingsTab.classList.add('active');
+  messagesTab.classList.remove('active');
+  settingsPanel.hidden = false;
+}
+
+messagesTab.addEventListener('click', showMessagesTab);
+settingsTab.addEventListener('click', showSettingsTab);
+settingsLock.addEventListener('click', async () => {
+  await api('/api/auth/logout', { method: 'POST' }).catch(() => {});
+  showAuth();
 });
 
 recoveryCopy.addEventListener('click', async () => {

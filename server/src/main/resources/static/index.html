@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <meta name="theme-color" content="#f4f0e8">
   <link rel="manifest" href="/manifest.webmanifest">
-  <title>Gather | Team chat</title>
+  <title>NeonMonkey | Private messaging</title>
   <link rel="stylesheet" href="/style.css">
 </head>
 <body>
@@ -14,14 +14,14 @@
       <div class="brand auth-brand"><span class="brand-mark" aria-hidden="true"><svg viewBox="0 0 40 40" role="img"><circle cx="20" cy="21" r="12"/><circle cx="8" cy="18" r="6"/><circle cx="32" cy="18" r="6"/><circle cx="15" cy="19" r="2.2" class="logo-eye"/><circle cx="25" cy="19" r="2.2" class="logo-eye"/><path d="M15 26c3 3 7 3 10 0" class="logo-line"/></svg></span><span>neonmonkey</span></div>
       <p class="eyebrow">PRIVATE MESSAGING</p>
       <h1 id="auth-title">Create an anonymous identity</h1>
-      <p class="auth-subtitle">No email. No phone number. Your recovery phrase is the only way to restore this identity.</p>
+      <p class="auth-subtitle">No email. No phone number. Create an identity with your name, or log in with your recovery phrase.</p>
       <form id="auth-form">
         <label id="name-field">Your display name<input id="display-name-input" name="name" autocomplete="off" placeholder="e.g. Luna" maxlength="40" required></label>
-        <label id="account-id-field" hidden>Account ID<input id="account-id-input" name="accountId" autocomplete="off" placeholder="Paste your 32-character ID"></label>
-        <button id="auth-submit" class="auth-submit" type="submit">Generate identity</button>
+        <label id="recovery-field" hidden>Recovery phrase<textarea id="recovery-input" name="recovery" autocomplete="off" placeholder="Enter your saved recovery phrase"></textarea></label>
+        <button id="auth-submit" class="auth-submit" type="submit">Create account</button>
         <p id="auth-error" class="auth-error" role="alert"></p>
       </form>
-      <p class="auth-switch"><span id="auth-prompt">Already have an identity?</span> <button id="auth-switch" type="button">Restore it</button></p>
+      <p class="auth-switch"><span id="auth-prompt">Already have an account?</span> <button id="auth-switch" type="button">Log in</button></p>
     </div>
   </section>
   <dialog id="recovery-dialog" class="recovery-dialog">
@@ -38,35 +38,23 @@
   <main id="app-shell" class="app-shell" hidden>
     <aside class="sidebar">
       <div class="brand"><span class="brand-mark" aria-hidden="true"><svg viewBox="0 0 40 40" role="img"><circle cx="20" cy="21" r="12"/><circle cx="8" cy="18" r="6"/><circle cx="32" cy="18" r="6"/><circle cx="15" cy="19" r="2.2" class="logo-eye"/><circle cx="25" cy="19" r="2.2" class="logo-eye"/><path d="M15 26c3 3 7 3 10 0" class="logo-line"/></svg></span><span>neonmonkey</span></div>
-      <div class="workspace-label">Workspace <button class="icon-button" aria-label="Workspace menu">⌄</button></div>
       <nav class="primary-nav" aria-label="Primary navigation">
-        <button class="nav-item active"><span>▦</span> Inbox <b>3</b></button>
-        <button class="nav-item"><span>☆</span> Saved</button>
-        <button class="nav-item"><span>⌕</span> Search</button>
+        <button id="messages-tab" class="nav-item active" type="button"><span>▦</span> Messages</button>
+        <button id="settings-tab" class="nav-item" type="button"><span>⚙</span> Settings</button>
       </nav>
-      <div class="channel-heading"><span>Direct message</span></div>
-      <form id="recipient-form" class="recipient-form">
-        <input id="recipient-input" autocomplete="off" placeholder="Paste recipient ID" aria-label="Recipient account ID" required>
-        <button type="submit">Open</button>
-      </form>
-      <p id="recipient-error" class="recipient-error" role="alert"></p>
-      <form id="group-form" class="recipient-form">
-        <input id="group-name-input" autocomplete="off" placeholder="New group name" aria-label="New group name" required>
-        <input id="group-members-input" autocomplete="off" placeholder="Member IDs, comma-separated" aria-label="Group member IDs" required>
-        <button type="submit">Create</button>
-      </form>
-      <p id="group-error" class="recipient-error" role="alert"></p>
-      <nav class="channels" aria-label="Direct messages">
-        <button id="recipient-label" class="channel active" type="button"><i>↗</i> No conversation selected</button>
+      <div class="channel-heading"><span>Your chats</span></div>
+      <nav id="chat-list" class="channels" aria-label="Direct messages">
+        <button class="channel empty-chat" type="button"><i>↗</i> No chats yet</button>
       </nav>
       <div class="sidebar-footer"><div class="avatar avatar-you">A</div><div><strong id="profile-name">Anonymous</strong><small id="profile-email">Identity</small></div><button id="logout-button" class="more-button" type="button">Lock</button></div>
     </aside>
     <section class="chat-panel">
-      <header class="chat-header"><div><p class="eyebrow">END-TO-END ENCRYPTED</p><h1><span>↗</span> <span id="conversation-name">No conversation selected</span></h1><p class="subtitle">Only you and the recipient can decrypt these messages.</p></div><div class="header-actions"><button class="round-button" aria-label="Conversation details">ⓘ</button></div></header>
+      <header class="chat-header"><div><p class="eyebrow">MESSAGES</p><h1><span>✦</span> NeonMonkey</h1><p class="subtitle">Private conversations, encrypted on your device.</p></div></header>
+      <div id="home-empty" class="home-empty"><div class="home-monkey">🐒</div><h2>Your messages</h2><p>Start a private conversation by adding someone’s NeonMonkey ID.</p><form id="recipient-form" class="recipient-form"><input id="recipient-input" autocomplete="off" placeholder="Paste a recipient ID" aria-label="Recipient account ID" required><button type="submit">Start chat</button></form><p id="recipient-error" class="recipient-error" role="alert"></p></div>
       <div id="messages" class="messages" aria-live="polite"></div>
       <div class="composer-wrap"><div class="typing-indicator">Messages are encrypted on this device before sending.</div><div id="emoji-bar" class="emoji-bar"><button type="button">😀</button><button type="button">😂</button><button type="button">❤️</button><button type="button">🎉</button><button type="button">🔥</button><button type="button">👍</button></div><form id="message-form" class="composer"><button id="attach-button" type="button" class="compose-icon" aria-label="Add attachment">+</button><input id="attachment-input" type="file" hidden><input id="message-input" autocomplete="off" placeholder="Select a conversation first" aria-label="Message" disabled><select id="expiry-select" aria-label="Disappearing message duration"><option value="0">Keep</option><option value="60">1 min</option><option value="3600">1 hour</option><option value="86400">1 day</option></select><button class="send-button" type="submit" aria-label="Send message">↑</button></form><p class="composer-hint"><kbd>Enter</kbd> to send <span>·</span> <kbd>Shift + Enter</kbd> for a new line</p></div>
     </section>
-    <aside class="details-panel"><div class="details-top"><span>About this channel</span><button class="close-details" aria-label="Close details">×</button></div><div class="channel-illustration">✦</div><h2>project-lounge</h2><p class="details-copy">The informal corner of Gather. Bring work in progress, tiny wins, and anything worth sharing.</p><div class="detail-section"><p class="section-label">Pinned note</p><div class="note"><span>✦</span><p>Demo day is Friday at 4:00 PM.<br><small>Added by Maya · yesterday</small></p></div></div><div class="detail-section"><p class="section-label">People <span>11 members</span></p><div class="people"><div class="person"><span class="avatar avatar-maya">M</span><span><strong>Maya Chen</strong><small>Workspace admin</small></span><i class="status"></i></div><div class="person"><span class="avatar avatar-jules">J</span><span><strong>Jules Park</strong><small>Product designer</small></span><i class="status"></i></div><div class="person"><span class="avatar avatar-lee">L</span><span><strong>Lee Robinson</strong><small>Engineer</small></span><i class="status away"></i></div></div></div></aside>
+    <aside id="settings-panel" class="details-panel" hidden><div class="details-top"><span>Settings</span></div><div class="channel-illustration">⚙</div><h2 id="settings-name">Anonymous</h2><p class="details-copy">Your account is anonymous. Keep your recovery phrase safe because NeonMonkey cannot reset it.</p><div class="detail-section"><p class="section-label">Account ID</p><code id="settings-account-id" class="settings-id"></code></div><button id="settings-lock" class="auth-submit" type="button">Lock account</button></aside>
   </main>
   <script src="/app.js"></script>
   <script>

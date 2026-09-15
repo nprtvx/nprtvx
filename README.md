@@ -39,6 +39,14 @@ The message transport is still the legacy plaintext placeholder at this stage. I
 
 This repository includes a `Dockerfile` and `render.yaml` for Render.
 
+## Product flow
+
+1. Open `neonmonkey.in`.
+2. Choose **Create account**, enter a display name, and NeonMonkey generates the identity automatically.
+3. Save the generated account ID and recovery phrase.
+4. Choose **Log in** later and enter the recovery phrase on the device where the identity was created.
+5. The Home screen contains only **Messages** and **Settings**. New accounts show an empty chat list until a conversation is started.
+
 ### Blueprint deployment
 
 1. In Render, choose **New +** → **Blueprint**.
