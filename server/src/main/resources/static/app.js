@@ -34,10 +34,17 @@ function renderMessage(message) {
 }
 
 async function api(path, options = {}) {
-  const response = await fetch(path, { ...options, headers: { 'Content-Type': 'application/json', ...(options.headers || {}) } });
+  let response;
+  try {
+    response = await fetch(path, { ...options, headers: { 'Content-Type': 'application/json', ...(options.headers || {}) } });
+  } catch (error) {
+    throw new Error('Unable to connect to Gather. Check your internet connection and try again.');
+  }
   let body = null;
   try { body = await response.json(); } catch (_) {}
-  if (!response.ok) throw new Error(body?.message || 'Something went wrong');
+  if (!response.ok) {
+    throw new Error(body?.message || body?.detail || body?.error || `Request failed (${response.status})`);
+  }
   return body;
 }
 
@@ -54,7 +61,10 @@ function showApp(user) {
   profileEmail.textContent = user.email;
   authScreen.hidden = true;
   appShell.hidden = false;
-  loadMessages(true);
+  loadMessages(true).catch((error) => {
+    showAuth();
+    authError.textContent = error.message;
+  });
   clearInterval(pollTimer);
   pollTimer = setInterval(() => loadMessages(false).catch(() => {}), 2000);
 }
