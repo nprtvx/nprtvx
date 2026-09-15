@@ -21,8 +21,10 @@ const recipientError = document.querySelector('#recipient-error');
 const recipientLabel = document.querySelector('#recipient-label');
 const conversationName = document.querySelector('#conversation-name');
 const recoveryDialog = document.querySelector('#recovery-dialog');
+const recoveryAccountId = document.querySelector('#recovery-account-id');
 const recoveryPhrase = document.querySelector('#recovery-phrase');
 const recoveryCopy = document.querySelector('#recovery-copy');
+const recoveryIdCopy = document.querySelector('#recovery-id-copy');
 const recoveryContinue = document.querySelector('#recovery-continue');
 let restoreMode = false;
 let currentIdentity;
@@ -231,7 +233,9 @@ authForm.addEventListener('submit', async (event) => {
       generatedIdentity = await createIdentity(displayName);
       currentPrivateKey = await importPrivateKey((await decryptBundle(generatedIdentity.identity.recoveryBundle, generatedIdentity.phrase)).privateKey);
       const registered = await api('/api/identity/register', { method: 'POST', body: JSON.stringify(generatedIdentity.identity) });
+      recoveryAccountId.textContent = registered.accountId;
       recoveryPhrase.textContent = generatedIdentity.phrase;
+      recoveryIdCopy.textContent = 'Copy account ID';
       recoveryCopy.textContent = 'Copy phrase';
       recoveryDialog.showModal();
       await waitForRecoveryConfirmation();
@@ -272,6 +276,11 @@ recipientForm.addEventListener('submit', async (event) => {
 recoveryCopy.addEventListener('click', async () => {
   await navigator.clipboard.writeText(recoveryPhrase.textContent);
   recoveryCopy.textContent = 'Copied';
+});
+
+recoveryIdCopy.addEventListener('click', async () => {
+  await navigator.clipboard.writeText(recoveryAccountId.textContent);
+  recoveryIdCopy.textContent = 'Copied';
 });
 
 logoutButton.addEventListener('click', async () => {
