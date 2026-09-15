@@ -4,7 +4,7 @@
   "description": "Private end-to-end encrypted messaging",
   "start_url": "/",
   "display": "standalone",
-  "background_color": "#ddd8ce",
-  "theme_color": "#e86853",
+  "background_color": "#080a10",
+  "theme_color": "#9b7cff",
   "icons": []
 }
