@@ -424,7 +424,8 @@ authForm.addEventListener('submit', async (event) => {
       recoveryCopy.textContent = 'Copy phrase';
       recoveryDialog.showModal();
       await waitForRecoveryConfirmation();
-      showApp(registered, '/settings');
+      window.location.assign('/settings');
+      return;
     } else {
       const saved = JSON.parse(localStorage.getItem('neonmonkey_identity') || 'null');
       if (!saved?.accountId) throw new Error('This device has no saved NeonMonkey identity. Restore it on the device where you created it.');
@@ -446,7 +447,8 @@ authForm.addEventListener('submit', async (event) => {
         displayName,
         publicKey
       }));
-      showApp(response, '/messages');
+      window.location.assign('/messages');
+      return;
     }
   } catch (error) {
     authError.textContent = error.message.includes('OperationError')
