@@ -5,6 +5,8 @@ import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import org.springframework.boot.SpringApplication;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
+import org.springframework.boot.autoconfigure.jdbc.DataSourceAutoConfiguration;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpStatus;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.server.ResponseStatusException;
@@ -22,7 +24,7 @@ import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
 
-@SpringBootApplication
+@SpringBootApplication(exclude = DataSourceAutoConfiguration.class)
 @EnableScheduling
 @RestController
 public final class ChatServer {
@@ -35,6 +37,23 @@ public final class ChatServer {
     private final HttpClient httpClient = HttpClient.newHttpClient();
     private final Map<String, Group> groups = new ConcurrentHashMap<>();
     private final List<EncryptedGroupMessage> groupMessages = new CopyOnWriteArrayList<>();
+    private final PostgresPersistence persistence;
+
+    @Autowired
+    public ChatServer(PostgresPersistence persistence) {
+        this.persistence = persistence;
+        PostgresPersistence.Snapshot snapshot = persistence.load();
+        identities.putAll(snapshot.identities());
+        sessions.putAll(snapshot.sessions());
+        messages.addAll(snapshot.messages());
+        attachments.addAll(snapshot.attachments());
+        groups.putAll(snapshot.groups());
+        groupMessages.addAll(snapshot.groupMessages());
+    }
+
+    public ChatServer() {
+        this(new PostgresPersistence());
+    }
 
     public static void main(String[] args) {
         SpringApplication.run(ChatServer.class, args);
@@ -54,10 +73,12 @@ public final class ChatServer {
     public IdentityResponse register(@RequestBody(required = false) RegisterRequest request,
                                      HttpServletResponse response) {
         validateRegistration(request);
-        if (identities.putIfAbsent(request.accountId(), new Identity(
-                request.accountId(), request.displayName(), request.publicKey(), request.recoveryBundle())) != null) {
+        Identity identity = new Identity(
+                request.accountId(), request.displayName(), request.publicKey(), request.recoveryBundle());
+        if (identities.putIfAbsent(request.accountId(), identity) != null) {
             throw new ResponseStatusException(HttpStatus.CONFLICT, "That identity already exists");
         }
+        persistence.saveIdentity(identity);
         createSession(request.accountId(), response);
         return new IdentityResponse(request.accountId(), request.displayName(), request.publicKey(), request.recoveryBundle());
     }
@@ -77,6 +98,7 @@ public final class ChatServer {
             validateRegistration(registration);
             identity = identities.computeIfAbsent(accountId,
                     ignored -> new Identity(accountId, request.displayName(), request.publicKey(), request.recoveryBundle()));
+            persistence.saveIdentity(identity);
         }
         if (identity == null) {
             throw new ResponseStatusException(HttpStatus.NOT_FOUND, "Identity not found");
@@ -125,7 +147,10 @@ public final class ChatServer {
     @PostMapping("/api/auth/logout")
     public void logout(HttpServletRequest request, HttpServletResponse response) {
         String token = cookieValue(request, SESSION_COOKIE);
-        if (token != null) sessions.remove(token);
+        if (token != null) {
+            sessions.remove(token);
+            persistence.deleteSession(token);
+        }
         Cookie cookie = new Cookie(SESSION_COOKIE, "");
         cookie.setMaxAge(0);
         cookie.setPath("/");
@@ -166,6 +191,7 @@ public final class ChatServer {
                 identity.accountId(), recipient.accountId(), request.iv(), request.ciphertext(),
                 System.currentTimeMillis(), expiresAt);
         messages.add(message);
+        persistence.saveDirectMessage(message);
         return message;
     }
 
@@ -179,6 +205,7 @@ public final class ChatServer {
         }
         EncryptedAttachment attachment = validateAttachment(request, identity.accountId(), recipientAccountId, null);
         attachments.add(attachment);
+        persistence.saveAttachment(attachment);
         return attachment;
     }
 
@@ -217,6 +244,7 @@ public final class ChatServer {
         String groupId = UUID.randomUUID().toString();
         groups.put(groupId, new Group(groupId, request.name().trim(), owner.accountId(), members,
                 Map.copyOf(request.memberKeys())));
+        persistence.saveGroup(groups.get(groupId));
         return groupResponse(groups.get(groupId), owner.accountId());
     }
 
@@ -262,6 +290,7 @@ public final class ChatServer {
         EncryptedGroupMessage message = new EncryptedGroupMessage(groupId, identity.accountId(),
                 request.iv(), request.ciphertext(), System.currentTimeMillis(), expiresAt);
         groupMessages.add(message);
+        persistence.saveGroupMessage(message);
         return message;
     }
 
@@ -273,6 +302,7 @@ public final class ChatServer {
         requireGroupMember(groupId, identity.accountId());
         EncryptedAttachment attachment = validateAttachment(request, identity.accountId(), null, groupId);
         attachments.add(attachment);
+        persistence.saveAttachment(attachment);
         return attachment;
     }
 
@@ -292,6 +322,7 @@ public final class ChatServer {
         messages.removeIf(message -> message.expiresAt() != null && message.expiresAt() <= now);
         groupMessages.removeIf(message -> message.expiresAt() != null && message.expiresAt() <= now);
         attachments.removeIf(item -> item.expiresAt() != null && item.expiresAt() <= now);
+        persistence.deleteExpired(now);
     }
 
     private EncryptedAttachment validateAttachment(EncryptedAttachmentRequest request, String sender,
@@ -359,6 +390,7 @@ public final class ChatServer {
     private void createSession(String accountId, HttpServletResponse response) {
         String token = UUID.randomUUID().toString();
         sessions.put(token, accountId);
+        persistence.saveSession(token, accountId, System.currentTimeMillis() + (30L * 24 * 60 * 60 * 1000));
         Cookie cookie = new Cookie(SESSION_COOKIE, token);
         cookie.setHttpOnly(true);
         cookie.setSecure(true);
@@ -383,9 +415,9 @@ public final class ChatServer {
         return new ResponseStatusException(HttpStatus.BAD_REQUEST, message);
     }
 
-    private record Identity(String accountId, String displayName, String publicKey, String recoveryBundle) {}
-    private record Group(String groupId, String name, String ownerAccountId, Set<String> members,
-                         Map<String, String> memberKeys) {}
+    record Identity(String accountId, String displayName, String publicKey, String recoveryBundle) {}
+    record Group(String groupId, String name, String ownerAccountId, Set<String> members,
+                 Map<String, String> memberKeys) {}
     public record RegisterRequest(String accountId, String displayName, String publicKey, String recoveryBundle) {}
     public record RestoreRequest(String accountId, String displayName, String publicKey, String recoveryBundle) {}
     public record IdentityResponse(String accountId, String displayName, String publicKey, String recoveryBundle) {}

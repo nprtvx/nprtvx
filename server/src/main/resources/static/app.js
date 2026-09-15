@@ -216,19 +216,20 @@ async function encryptAttachment(file) {
   };
 }
 
-function createRecoveryPhrase() {
+function createRecoveryPhrase(accountId) {
   const random = crypto.getRandomValues(new Uint8Array(12));
-  return [...random].map((byte) => WORDS[byte % WORDS.length]).join(' ');
+  return `${accountId} ${[...random].map((byte) => WORDS[byte % WORDS.length]).join(' ')}`;
 }
 
 async function createIdentity(displayName) {
   const keyPair = await crypto.subtle.generateKey({ name: 'ECDH', namedCurve: 'P-256' }, true, ['deriveKey', 'deriveBits']);
   const publicKey = await crypto.subtle.exportKey('jwk', keyPair.publicKey);
   const privateKey = await crypto.subtle.exportKey('jwk', keyPair.privateKey);
-  const phrase = createRecoveryPhrase();
   const publicKeyJson = JSON.stringify(publicKey);
+  const accountId = await sha256Hex(publicKeyJson);
+  const phrase = createRecoveryPhrase(accountId);
   const identity = {
-    accountId: await sha256Hex(publicKeyJson),
+    accountId,
     displayName,
     publicKey: publicKeyJson,
     recoveryBundle: await encryptBundle({ privateKey, publicKey }, phrase)
@@ -427,25 +428,36 @@ authForm.addEventListener('submit', async (event) => {
       window.location.assign('/settings');
       return;
     } else {
+      const phrase = recoveryInput.value.trim();
+      const phraseAccountId = phrase.split(/\s+/)[0].toLowerCase();
       const saved = JSON.parse(localStorage.getItem('neonmonkey_identity') || 'null');
-      if (!saved?.accountId) throw new Error('This device has no saved NeonMonkey identity. Restore it on the device where you created it.');
-      const bundle = await decryptBundle(saved.recoveryBundle, recoveryInput.value.trim());
+      const accountId = /^[a-f0-9]{32}$/.test(phraseAccountId) ? phraseAccountId : saved?.accountId;
+      if (!accountId) throw new Error('Your recovery phrase must start with your 32-character account ID.');
+      const response = saved?.accountId === accountId
+        ? await api('/api/identity/restore', {
+            method: 'POST',
+            body: JSON.stringify({
+              accountId,
+              displayName: saved.displayName,
+              publicKey: saved.publicKey,
+              recoveryBundle: saved.recoveryBundle
+            })
+          })
+        : await api('/api/identity/restore', {
+            method: 'POST',
+            body: JSON.stringify({ accountId })
+          });
+      const bundleSource = saved?.accountId === accountId ? saved.recoveryBundle : response.recoveryBundle;
+      const bundle = await decryptBundle(bundleSource, phrase);
       currentPrivateKey = await importPrivateKey(bundle.privateKey);
-      const publicKey = saved.publicKey || JSON.stringify(bundle.publicKey);
-      const displayName = saved.displayName || `anon-${saved.accountId.slice(0, 8)}`;
-      const response = await api('/api/identity/restore', {
-        method: 'POST',
-        body: JSON.stringify({
-          accountId: saved.accountId,
-          displayName,
-          publicKey,
-          recoveryBundle: saved.recoveryBundle
-        })
-      });
+      const publicKey = saved?.publicKey || JSON.stringify(bundle.publicKey);
+      const displayName = saved?.displayName || response.displayName || `anon-${accountId.slice(0, 8)}`;
       localStorage.setItem('neonmonkey_identity', JSON.stringify({
         ...saved,
+        accountId,
         displayName,
-        publicKey
+        publicKey,
+        recoveryBundle: response.recoveryBundle
       }));
       window.location.assign('/messages');
       return;

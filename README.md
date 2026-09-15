@@ -44,7 +44,7 @@ This repository includes a `Dockerfile` and `render.yaml` for Render.
 1. Open `neonmonkey.in`.
 2. Choose **Create account**, enter a display name, and NeonMonkey generates the identity automatically.
 3. Save the generated account ID and recovery phrase.
-4. Choose **Log in** later and enter the recovery phrase on the device where the identity was created.
+4. Choose **Restore account** later and enter the recovery phrase. New recovery phrases begin with the account ID so the encrypted bundle can be located on another device.
 5. The Home screen contains only **Messages** and **Settings**. New accounts show an empty chat list until a conversation is started.
 
 ### Blueprint deployment
@@ -75,3 +75,39 @@ GIF_PROVIDER_KEY=<server-side provider key>
 ```
 
 The browser never receives the provider key. Without these variables, emoji remains available and GIF search returns no results.
+
+## Optional PostgreSQL persistence
+
+The app uses in-memory storage when no database URL is configured, so local development
+still starts with only `mvn spring-boot:run`. To persist identities, sessions, messages,
+attachments, groups, group members, and group messages across restarts, set either
+`JDBC_DATABASE_URL` or `DATABASE_URL` before starting the app. `DATABASE_URL` may use
+Render's `postgres://...` format; a `jdbc:postgresql://...` URL is also accepted.
+
+The normalized schema is in `db/schema.sql` and is applied automatically when a database
+URL is present. For a Render Blueprint, attach a PostgreSQL database and expose its
+connection string as `DATABASE_URL`.
+
+### Docker Compose PostgreSQL
+
+For a local Docker deployment with PostgreSQL:
+
+```bash
+docker compose up --build
+```
+
+NeonMonkey is available at http://localhost:8080. PostgreSQL data is stored in the
+`neonmonkey-postgres` Docker volume and survives container restarts. To stop the
+containers without deleting data:
+
+```bash
+docker compose down
+```
+
+Set `POSTGRES_DB`, `POSTGRES_USER`, `POSTGRES_PASSWORD`, or `APP_PORT` in a `.env`
+file to override the development defaults. Do not use the default password in a
+public deployment.
+
+The application still needs an independent cryptographic audit before the custom browser
+protocol should be considered production-grade. Native iOS and Android clients remain
+separate client projects; the shared protocol and installable PWA are included here.
