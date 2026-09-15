@@ -90,10 +90,23 @@ connection string as `DATABASE_URL`.
 
 ### Docker Compose PostgreSQL
 
-For a local Docker deployment with PostgreSQL:
+Docker Compose must be installed separately from the Docker Engine. Verify it with:
+
+```bash
+docker compose version
+```
+
+On Linux, install the Compose plugin using your distribution's Docker documentation,
+or install the standalone `docker-compose` package. Then use the matching command:
 
 ```bash
 docker compose up --build
+```
+
+For the standalone binary, use:
+
+```bash
+docker-compose up --build
 ```
 
 NeonMonkey is available at http://localhost:8080. PostgreSQL data is stored in the
@@ -103,6 +116,8 @@ containers without deleting data:
 ```bash
 docker compose down
 ```
+
+Use `docker-compose down` when using the standalone binary.
 
 Set `POSTGRES_DB`, `POSTGRES_USER`, `POSTGRES_PASSWORD`, or `APP_PORT` in a `.env`
 file to override the development defaults. Do not use the default password in a
