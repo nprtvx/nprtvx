@@ -1,6 +1,7 @@
 const authScreen = document.querySelector('#auth-screen');
 const appShell = document.querySelector('#app-shell');
 const authForm = document.querySelector('#auth-form');
+const authSubmit = document.querySelector('#auth-submit');
 const authError = document.querySelector('#auth-error');
 const authSwitch = document.querySelector('#auth-switch');
 const authTitle = document.querySelector('#auth-title');
@@ -353,6 +354,8 @@ authSwitch.addEventListener('click', updateAuthMode);
 authForm.addEventListener('submit', async (event) => {
   event.preventDefault();
   authError.textContent = '';
+  authSubmit.disabled = true;
+  authSubmit.textContent = restoreMode ? 'Logging in…' : 'Creating account…';
   try {
     if (!restoreMode) {
       const displayName = displayNameInput.value.trim();
@@ -378,19 +381,31 @@ authForm.addEventListener('submit', async (event) => {
       if (!saved?.accountId) throw new Error('This device has no saved NeonMonkey identity. Restore it on the device where you created it.');
       const bundle = await decryptBundle(saved.recoveryBundle, recoveryInput.value.trim());
       currentPrivateKey = await importPrivateKey(bundle.privateKey);
+      const publicKey = saved.publicKey || JSON.stringify(bundle.publicKey);
+      const displayName = saved.displayName || `anon-${saved.accountId.slice(0, 8)}`;
       const response = await api('/api/identity/restore', {
         method: 'POST',
         body: JSON.stringify({
           accountId: saved.accountId,
-          displayName: saved.displayName,
-          publicKey: saved.publicKey,
+          displayName,
+          publicKey,
           recoveryBundle: saved.recoveryBundle
         })
       });
+      localStorage.setItem('neonmonkey_identity', JSON.stringify({
+        ...saved,
+        displayName,
+        publicKey
+      }));
       showApp(response);
     }
   } catch (error) {
-    authError.textContent = error.message.includes('OperationError') ? 'That recovery phrase is incorrect.' : error.message;
+    authError.textContent = error.message.includes('OperationError')
+      ? 'That recovery phrase is incorrect.'
+      : error.message || 'Login failed. Try again.';
+  } finally {
+    authSubmit.disabled = false;
+    authSubmit.textContent = restoreMode ? 'Log in' : 'Create account';
   }
 });
 
