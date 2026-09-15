@@ -15,6 +15,7 @@ const input = document.querySelector('#message-input');
 const expirySelect = document.querySelector('#expiry-select');
 const attachButton = document.querySelector('#attach-button');
 const attachmentInput = document.querySelector('#attachment-input');
+const emojiBar = document.querySelector('#emoji-bar');
 const profileName = document.querySelector('#profile-name');
 const profileEmail = document.querySelector('#profile-email');
 const logoutButton = document.querySelector('#logout-button');
@@ -432,6 +433,14 @@ input.addEventListener('keydown', (event) => {
 });
 
 attachButton.addEventListener('click', () => attachmentInput.click());
+emojiBar.addEventListener('click', (event) => {
+  const button = event.target.closest('button');
+  if (!button || input.disabled) return;
+  const start = input.selectionStart ?? input.value.length;
+  input.value = `${input.value.slice(0, start)}${button.textContent}${input.value.slice(start)}`;
+  input.focus();
+  input.selectionStart = input.selectionEnd = start + button.textContent.length;
+});
 attachmentInput.addEventListener('change', async () => {
   const file = attachmentInput.files?.[0];
   attachmentInput.value = '';

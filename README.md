@@ -58,3 +58,12 @@ If creating the service manually, use:
 | Health check path | `/health` |
 
 Do not set `PORT` manually. Render provides it automatically, and the container uses it to bind the Spring Boot server.
+
+Optional GIF proxy configuration:
+
+```text
+GIF_PROVIDER_URL=<your provider search endpoint>
+GIF_PROVIDER_KEY=<server-side provider key>
+```
+
+The browser never receives the provider key. Without these variables, emoji remains available and GIF search returns no results.

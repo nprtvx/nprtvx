@@ -16,6 +16,10 @@ import java.time.format.DateTimeFormatter;
 import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.CopyOnWriteArrayList;
+import java.net.URI;
+import java.net.http.HttpClient;
+import java.net.http.HttpRequest;
+import java.net.http.HttpResponse;
 
 @SpringBootApplication
 @EnableScheduling
@@ -27,6 +31,7 @@ public final class ChatServer {
     private final Map<String, String> sessions = new ConcurrentHashMap<>();
     private final List<EncryptedMessage> messages = new CopyOnWriteArrayList<>();
     private final List<EncryptedAttachment> attachments = new CopyOnWriteArrayList<>();
+    private final HttpClient httpClient = HttpClient.newHttpClient();
     private final Map<String, Group> groups = new ConcurrentHashMap<>();
     private final List<EncryptedGroupMessage> groupMessages = new CopyOnWriteArrayList<>();
 
@@ -79,6 +84,26 @@ public final class ChatServer {
             throw new ResponseStatusException(HttpStatus.NOT_FOUND, "Identity not found");
         }
         return new PublicIdentity(identity.accountId(), identity.displayName(), identity.publicKey());
+    }
+
+    @GetMapping("/api/gifs/search")
+    public List<GifResult> searchGifs(@RequestParam(defaultValue = "") String q,
+                                      HttpServletRequest request) {
+        requireIdentity(request);
+        String providerUrl = System.getenv("GIF_PROVIDER_URL");
+        String providerKey = System.getenv("GIF_PROVIDER_KEY");
+        if (blank(q) || blank(providerUrl) || blank(providerKey)) return List.of();
+        try {
+            String encodedQuery = java.net.URLEncoder.encode(q.trim(), java.nio.charset.StandardCharsets.UTF_8);
+            HttpRequest upstream = HttpRequest.newBuilder()
+                    .uri(URI.create(providerUrl + "?q=" + encodedQuery + "&key=" + providerKey))
+                    .GET().build();
+            HttpResponse<String> response = httpClient.send(upstream, HttpResponse.BodyHandlers.ofString());
+            if (response.statusCode() / 100 != 2) return List.of();
+            return List.of(new GifResult("provider-response", response.body()));
+        } catch (Exception exception) {
+            return List.of();
+        }
     }
 
     @PostMapping("/api/auth/logout")
@@ -363,4 +388,5 @@ public final class ChatServer {
     public record EncryptedAttachment(String attachmentId, String senderAccountId, String recipientAccountId,
                                       String groupId, String name, String mimeType, String iv,
                                       String ciphertext, long createdAt, Long expiresAt) {}
+    public record GifResult(String id, String payload) {}
 }
