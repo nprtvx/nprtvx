@@ -12,6 +12,9 @@ const displayNameInput = document.querySelector('#display-name-input');
 const messages = document.querySelector('#messages');
 const form = document.querySelector('#message-form');
 const input = document.querySelector('#message-input');
+const expirySelect = document.querySelector('#expiry-select');
+const attachButton = document.querySelector('#attach-button');
+const attachmentInput = document.querySelector('#attachment-input');
 const profileName = document.querySelector('#profile-name');
 const profileEmail = document.querySelector('#profile-email');
 const logoutButton = document.querySelector('#logout-button');
@@ -20,6 +23,10 @@ const recipientInput = document.querySelector('#recipient-input');
 const recipientError = document.querySelector('#recipient-error');
 const recipientLabel = document.querySelector('#recipient-label');
 const conversationName = document.querySelector('#conversation-name');
+const groupForm = document.querySelector('#group-form');
+const groupNameInput = document.querySelector('#group-name-input');
+const groupMembersInput = document.querySelector('#group-members-input');
+const groupError = document.querySelector('#group-error');
 const recoveryDialog = document.querySelector('#recovery-dialog');
 const recoveryAccountId = document.querySelector('#recovery-account-id');
 const recoveryPhrase = document.querySelector('#recovery-phrase');
@@ -42,6 +49,8 @@ function waitForRecoveryConfirmation() {
 let currentPrivateKey;
 let currentRecipient;
 let currentRecipientKey;
+let currentGroup;
+let currentGroupKey;
 
 const WORDS = ['amber', 'anchor', 'apple', 'arrow', 'atlas', 'autumn', 'bamboo', 'beacon', 'berry', 'blossom', 'blue', 'breeze', 'canyon', 'cedar', 'circle', 'cloud', 'cobalt', 'comet', 'coral', 'crystal', 'dawn', 'delta', 'ember', 'falcon', 'forest', 'glow', 'harbor', ' Hazel'.trim(), 'island', 'jasmine', 'lantern', 'lemon', 'linen', 'maple', 'meadow', 'meteor', 'mint', 'moon', 'navy', 'ocean', 'olive', 'orbit', 'pebble', 'pine', 'plum', 'prairie', 'rain', 'river', 'rose', 'saffron', 'shadow', 'silver', 'sky', 'snow', 'solar', 'sparrow', 'spring', 'stone', 'sunset', 'tulip', 'velvet', 'violet', 'willow', 'winter'];
 
@@ -137,6 +146,68 @@ async function decryptMessage(message, senderPublicKey) {
   return new TextDecoder().decode(plaintext);
 }
 
+async function deriveSharedKey(publicKey) {
+  return crypto.subtle.deriveKey(
+    { name: 'ECDH', public: publicKey },
+    currentPrivateKey,
+    { name: 'AES-GCM', length: 256 },
+    false,
+    ['encrypt', 'decrypt']
+  );
+}
+
+async function wrapGroupKey(groupKey, publicKey) {
+  const sharedKey = await deriveSharedKey(publicKey);
+  const rawKey = await crypto.subtle.exportKey('raw', groupKey);
+  const iv = crypto.getRandomValues(new Uint8Array(12));
+  const ciphertext = await crypto.subtle.encrypt({ name: 'AES-GCM', iv }, sharedKey, rawKey);
+  return JSON.stringify({ iv: bytesToBase64(iv), ciphertext: bytesToBase64(new Uint8Array(ciphertext)) });
+}
+
+async function unwrapGroupKey(encryptedKey) {
+  const envelope = JSON.parse(encryptedKey);
+  const sharedKey = await deriveSharedKey(await importPublicKey(JSON.parse(currentIdentity.publicKey)));
+  const rawKey = await crypto.subtle.decrypt(
+    { name: 'AES-GCM', iv: base64ToBytes(envelope.iv) },
+    sharedKey,
+    base64ToBytes(envelope.ciphertext)
+  );
+  return crypto.subtle.importKey('raw', rawKey, { name: 'AES-GCM' }, false, ['encrypt', 'decrypt']);
+}
+
+async function encryptWithGroupKey(text) {
+  const iv = crypto.getRandomValues(new Uint8Array(12));
+  const ciphertext = await crypto.subtle.encrypt(
+    { name: 'AES-GCM', iv },
+    currentGroupKey,
+    new TextEncoder().encode(text)
+  );
+  return { iv: bytesToBase64(iv), ciphertext: bytesToBase64(new Uint8Array(ciphertext)) };
+}
+
+async function decryptWithGroupKey(message) {
+  const plaintext = await crypto.subtle.decrypt(
+    { name: 'AES-GCM', iv: base64ToBytes(message.iv) },
+    currentGroupKey,
+    base64ToBytes(message.ciphertext)
+  );
+  return new TextDecoder().decode(plaintext);
+}
+
+async function encryptAttachment(file) {
+  const bytes = new Uint8Array(await file.arrayBuffer());
+  const iv = crypto.getRandomValues(new Uint8Array(12));
+  const key = currentGroup ? currentGroupKey : await deriveSharedKey(currentRecipientKey);
+  const ciphertext = await crypto.subtle.encrypt({ name: 'AES-GCM', iv }, key, bytes);
+  return {
+    name: file.name,
+    mimeType: file.type || 'application/octet-stream',
+    iv: bytesToBase64(iv),
+    ciphertext: bytesToBase64(new Uint8Array(ciphertext)),
+    expiresInSeconds: Number(expirySelect.value)
+  };
+}
+
 function createRecoveryPhrase() {
   const random = crypto.getRandomValues(new Uint8Array(12));
   return [...random].map((byte) => WORDS[byte % WORDS.length]).join(' ');
@@ -174,6 +245,20 @@ async function api(path, options = {}) {
 }
 
 async function loadMessages(scroll = false) {
+  if (currentGroup && currentGroupKey) {
+    const data = await api(`/api/groups/${currentGroup.groupId}/messages`);
+    messages.replaceChildren();
+    for (const message of data) {
+      renderMessage({
+        name: message.senderAccountId === currentIdentity.accountId ? currentIdentity.displayName : 'Group member',
+        text: await decryptWithGroupKey(message),
+        time: new Date(message.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+        mine: message.senderAccountId === currentIdentity.accountId
+      });
+    }
+    if (scroll) messages.scrollTop = messages.scrollHeight;
+    return;
+  }
   if (!currentRecipient || !currentRecipientKey || !currentPrivateKey) return;
   const data = await api(`/api/direct/${currentRecipient.accountId}`);
   messages.replaceChildren();
@@ -262,6 +347,8 @@ recipientForm.addEventListener('submit', async (event) => {
   try {
     const recipient = await api(`/api/identity/${accountId}`);
     currentRecipient = recipient;
+    currentGroup = null;
+    currentGroupKey = null;
     currentRecipientKey = await importPublicKey(JSON.parse(recipient.publicKey));
     recipientLabel.innerHTML = `<i>↗</i> ${escapeHtml(recipient.displayName)}`;
     conversationName.textContent = recipient.displayName;
@@ -270,6 +357,36 @@ recipientForm.addEventListener('submit', async (event) => {
     await loadMessages(true);
   } catch (error) {
     recipientError.textContent = error.message;
+  }
+});
+
+groupForm.addEventListener('submit', async (event) => {
+  event.preventDefault();
+  groupError.textContent = '';
+  try {
+    const memberIds = [...new Set(groupMembersInput.value.split(',').map((value) => value.trim().toLowerCase()).filter(Boolean))];
+    if (memberIds.some((id) => !/^[a-f0-9]{32}$/.test(id))) throw new Error('Every member ID must be 32 hexadecimal characters.');
+    if (!memberIds.includes(currentIdentity.accountId)) memberIds.push(currentIdentity.accountId);
+    const groupKey = await crypto.subtle.generateKey({ name: 'AES-GCM', length: 256 }, true, ['encrypt', 'decrypt']);
+    const memberKeys = {};
+    for (const accountId of memberIds) {
+      const member = accountId === currentIdentity.accountId
+        ? currentIdentity
+        : await api(`/api/identity/${accountId}`);
+      memberKeys[accountId] = await wrapGroupKey(groupKey, await importPublicKey(JSON.parse(member.publicKey)));
+    }
+    const group = await api('/api/groups', { method: 'POST', body: JSON.stringify({ name: groupNameInput.value.trim(), memberKeys }) });
+    currentGroup = group;
+    currentGroupKey = groupKey;
+    currentRecipient = null;
+    currentRecipientKey = null;
+    recipientLabel.innerHTML = `<i>◆</i> ${escapeHtml(group.name)}`;
+    conversationName.textContent = group.name;
+    input.disabled = false;
+    input.placeholder = `Message ${group.name}`;
+    await loadMessages(true);
+  } catch (error) {
+    groupError.textContent = error.message;
   }
 });
 
@@ -294,9 +411,16 @@ form.addEventListener('submit', async (event) => {
   if (!text) return;
   input.value = '';
   try {
-    if (!currentRecipient) throw new Error('Select a conversation first');
-    const encrypted = await encryptMessage(text);
-    await api(`/api/direct/${currentRecipient.accountId}`, { method: 'POST', body: JSON.stringify(encrypted) });
+    if (currentGroup) {
+      await api(`/api/groups/${currentGroup.groupId}/messages`, { method: 'POST', body: JSON.stringify({
+        ...await encryptWithGroupKey(text), expiresInSeconds: Number(expirySelect.value)
+      }) });
+    } else {
+      if (!currentRecipient) throw new Error('Select a conversation first');
+      await api(`/api/direct/${currentRecipient.accountId}`, { method: 'POST', body: JSON.stringify({
+        ...await encryptMessage(text), expiresInSeconds: Number(expirySelect.value)
+      }) });
+    }
     await loadMessages(true);
   } catch (_) {
     input.value = text;
@@ -305,6 +429,23 @@ form.addEventListener('submit', async (event) => {
 
 input.addEventListener('keydown', (event) => {
   if (event.key === 'Enter' && !event.shiftKey) form.requestSubmit();
+});
+
+attachButton.addEventListener('click', () => attachmentInput.click());
+attachmentInput.addEventListener('change', async () => {
+  const file = attachmentInput.files?.[0];
+  attachmentInput.value = '';
+  if (!file || (!currentRecipient && !currentGroup)) return;
+  try {
+    const payload = await encryptAttachment(file);
+    const path = currentGroup
+      ? `/api/groups/${currentGroup.groupId}/attachments`
+      : `/api/direct/${currentRecipient.accountId}/attachments`;
+    await api(path, { method: 'POST', body: JSON.stringify(payload) });
+    input.placeholder = `${file.name} uploaded encrypted`;
+  } catch (error) {
+    input.placeholder = error.message;
+  }
 });
 
 api('/api/identity/me').then(showApp).catch(showAuth);

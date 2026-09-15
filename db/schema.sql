@@ -30,3 +30,42 @@ CREATE INDEX IF NOT EXISTS encrypted_messages_recipient_idx
     ON encrypted_messages(recipient_account_id, created_at);
 CREATE INDEX IF NOT EXISTS encrypted_messages_expiry_idx
     ON encrypted_messages(expires_at);
+
+CREATE TABLE IF NOT EXISTS groups (
+    group_id UUID PRIMARY KEY,
+    name TEXT NOT NULL,
+    owner_account_id CHAR(32) NOT NULL REFERENCES identities(account_id),
+    created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE TABLE IF NOT EXISTS group_members (
+    group_id UUID NOT NULL REFERENCES groups(group_id) ON DELETE CASCADE,
+    account_id CHAR(32) NOT NULL REFERENCES identities(account_id) ON DELETE CASCADE,
+    encrypted_group_key JSONB NOT NULL,
+    PRIMARY KEY (group_id, account_id)
+);
+
+CREATE TABLE IF NOT EXISTS encrypted_group_messages (
+    message_id UUID PRIMARY KEY,
+    group_id UUID NOT NULL REFERENCES groups(group_id) ON DELETE CASCADE,
+    sender_account_id CHAR(32) NOT NULL REFERENCES identities(account_id),
+    ciphertext JSONB NOT NULL,
+    expires_at TIMESTAMPTZ,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE INDEX IF NOT EXISTS encrypted_group_messages_group_idx
+    ON encrypted_group_messages(group_id, created_at);
+
+CREATE TABLE IF NOT EXISTS encrypted_attachments (
+    attachment_id UUID PRIMARY KEY,
+    sender_account_id CHAR(32) NOT NULL REFERENCES identities(account_id),
+    recipient_account_id CHAR(32) REFERENCES identities(account_id),
+    group_id UUID REFERENCES groups(group_id) ON DELETE CASCADE,
+    name TEXT NOT NULL,
+    mime_type TEXT NOT NULL,
+    ciphertext JSONB NOT NULL,
+    expires_at TIMESTAMPTZ,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    CHECK ((recipient_account_id IS NOT NULL) <> (group_id IS NOT NULL))
+);
