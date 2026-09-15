@@ -1,0 +1,6 @@
+services:
+  - type: web
+    name: gather-chat
+    runtime: docker
+    plan: free
+    healthCheckPath: /api/messages

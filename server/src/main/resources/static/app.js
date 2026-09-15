@@ -4,8 +4,10 @@ const input = document.querySelector('#message-input');
 
 function renderMessage(message) {
   const row = document.createElement('article');
-  row.className = `message-row${message.mine ? ' mine' : ''}`;
-  row.innerHTML = `<div class="avatar ${message.mine ? 'avatar-you' : 'avatar-maya'}">${message.name[0]}</div><div class="message"><div class="message-meta"><strong>${escapeHtml(message.name)}</strong><time>${message.time}</time></div><p class="message-text">${escapeHtml(message.text)}</p></div>`;
+  const name = (message?.name ?? 'You').trim() || 'You';
+  const text = (message?.text ?? '').trim();
+  row.className = `message-row${message?.mine ? ' mine' : ''}`;
+  row.innerHTML = `<div class="avatar ${message?.mine ? 'avatar-you' : 'avatar-maya'}">${escapeHtml(name[0] || 'Y')}</div><div class="message"><div class="message-meta"><strong>${escapeHtml(name)}</strong><time>${escapeHtml(message?.time ?? 'now')}</time></div><p class="message-text">${escapeHtml(text)}</p></div>`;
   messages.append(row);
 }
 

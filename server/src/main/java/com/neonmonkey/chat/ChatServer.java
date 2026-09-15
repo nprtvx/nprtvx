@@ -1,120 +1,65 @@
 package com.neonmonkey.chat;
 
-import com.sun.net.httpserver.HttpExchange;
-import com.sun.net.httpserver.HttpServer;
+import org.springframework.boot.SpringApplication;
+import org.springframework.boot.autoconfigure.SpringBootApplication;
+import org.springframework.http.HttpStatus;
+import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.RequestBody;
+import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.server.ResponseStatusException;
 
-import java.io.IOException;
-import java.io.OutputStream;
-import java.net.InetSocketAddress;
-import java.nio.charset.StandardCharsets;
-import java.nio.file.Files;
-import java.nio.file.Path;
-import java.nio.file.Paths;
-import java.time.Instant;
-import java.util.ArrayList;
+import java.time.LocalTime;
+import java.time.format.DateTimeFormatter;
 import java.util.List;
-import java.util.Map;
-import java.util.concurrent.Executors;
-import java.util.regex.Matcher;
-import java.util.regex.Pattern;
+import java.util.concurrent.CopyOnWriteArrayList;
 
+@SpringBootApplication
+@RestController
+@RequestMapping("/api/messages")
 public final class ChatServer {
-    private static final int PORT = 8080;
-    private static final List<Message> messages = new ArrayList<>(List.of(
+    private static final DateTimeFormatter TIME_FORMAT = DateTimeFormatter.ofPattern("HH:mm");
+    private final List<Message> messages = new CopyOnWriteArrayList<>(List.of(
             new Message("Maya", "The new workspace is looking sharp.", "09:41", false),
             new Message("You", "That was the goal. Welcome in!", "09:42", true),
             new Message("Maya", "I left a few notes in the project channel.", "09:43", false)
     ));
-    private static final Pattern JSON_FIELD = Pattern.compile("\\\"(name|text)\\\"\\s*:\\s*\\\"((?:\\\\.|[^\\\"])*)\\\"");
 
-    public static void main(String[] args) throws IOException {
-        HttpServer server = HttpServer.create(new InetSocketAddress(PORT), 0);
-        server.createContext("/api/messages", ChatServer::handleMessages);
-        server.createContext("/", ChatServer::serveStatic);
-        server.setExecutor(Executors.newFixedThreadPool(4));
-        server.start();
-        System.out.println("Chat server running at http://localhost:" + PORT);
+    public static void main(String[] args) {
+        SpringApplication.run(ChatServer.class, args);
     }
 
-    private static void handleMessages(HttpExchange exchange) throws IOException {
-        addCorsHeaders(exchange);
-        if ("OPTIONS".equals(exchange.getRequestMethod())) {
-            send(exchange, 204, "");
-            return;
+    @GetMapping
+    public List<Message> getMessages() {
+        return List.copyOf(messages);
+    }
+
+    @PostMapping
+    public Message addMessage(@RequestBody(required = false) MessageRequest request) {
+        if (request == null || request.text() == null || request.text().isBlank()) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Message text is required");
         }
-        if ("GET".equals(exchange.getRequestMethod())) {
-            synchronized (messages) {
-                StringBuilder json = new StringBuilder("[");
-                for (int i = 0; i < messages.size(); i++) {
-                    if (i > 0) json.append(',');
-                    json.append(messages.get(i).toJson());
-                }
-                send(exchange, 200, json.append(']').toString(), "application/json");
-            }
-            return;
+
+        String safeName = request.name() == null ? "You" : request.name().trim();
+        if (safeName.isBlank()) {
+            safeName = "You";
         }
-        if ("POST".equals(exchange.getRequestMethod())) {
-            String body = new String(exchange.getRequestBody().readAllBytes(), StandardCharsets.UTF_8);
-            Matcher matcher = JSON_FIELD.matcher(body);
-            String name = null;
-            String text = null;
-            while (matcher.find()) {
-                if ("name".equals(matcher.group(1))) name = unescape(matcher.group(2));
-                if ("text".equals(matcher.group(1))) text = unescape(matcher.group(2));
-            }
-            if (text == null || text.isBlank()) {
-                send(exchange, 400, "{\"error\":\"Message text is required\"}", "application/json");
-                return;
-            }
-            Message message = new Message(name == null || name.isBlank() ? "You" : name, text.trim(), "now", true);
-            synchronized (messages) { messages.add(message); }
-            send(exchange, 201, message.toJson(), "application/json");
-            return;
-        }
-        send(exchange, 405, "{\"error\":\"Method not allowed\"}", "application/json");
+
+        String safeText = request.text().trim();
+        Message message = new Message(
+                safeName,
+                safeText,
+                LocalTime.now().format(TIME_FORMAT),
+                true
+        );
+        messages.add(message);
+        return message;
     }
 
-    private static void serveStatic(HttpExchange exchange) throws IOException {
-        String requestPath = exchange.getRequestURI().getPath();
-        if (requestPath.equals("/")) requestPath = "/index.html";
-        Path root = Paths.get("server", "src", "main", "resources", "static").toAbsolutePath().normalize();
-        Path file = root.resolve(requestPath.substring(1)).normalize();
-        if (!file.startsWith(root) || !Files.isRegularFile(file)) {
-            send(exchange, 404, "Not found");
-            return;
-        }
-        String contentType = Map.of(".html", "text/html; charset=utf-8", ".css", "text/css; charset=utf-8", ".js", "application/javascript; charset=utf-8").getOrDefault(extension(file), "application/octet-stream");
-        exchange.getResponseHeaders().set("Content-Type", contentType);
-        byte[] content = Files.readAllBytes(file);
-        exchange.sendResponseHeaders(200, content.length);
-        try (OutputStream output = exchange.getResponseBody()) { output.write(content); }
+    public record MessageRequest(String name, String text) {
     }
 
-    private static String extension(Path path) {
-        String name = path.getFileName().toString();
-        int dot = name.lastIndexOf('.');
-        return dot < 0 ? "" : name.substring(dot);
-    }
-
-    private static void addCorsHeaders(HttpExchange exchange) {
-        exchange.getResponseHeaders().set("Access-Control-Allow-Origin", "*");
-        exchange.getResponseHeaders().set("Access-Control-Allow-Methods", "GET, POST, OPTIONS");
-        exchange.getResponseHeaders().set("Access-Control-Allow-Headers", "Content-Type");
-    }
-
-    private static void send(HttpExchange exchange, int status, String body) throws IOException { send(exchange, status, body, "text/plain; charset=utf-8"); }
-
-    private static void send(HttpExchange exchange, int status, String body, String contentType) throws IOException {
-        exchange.getResponseHeaders().set("Content-Type", contentType);
-        byte[] bytes = body.getBytes(StandardCharsets.UTF_8);
-        exchange.sendResponseHeaders(status, bytes.length);
-        try (OutputStream output = exchange.getResponseBody()) { output.write(bytes); }
-    }
-
-    private static String unescape(String value) { return value.replace("\\\"", "\"").replace("\\\\", "\\"); }
-
-    private record Message(String name, String text, String time, boolean mine) {
-        String toJson() { return "{\"name\":\"" + escape(name) + "\",\"text\":\"" + escape(text) + "\",\"time\":\"" + time + "\",\"mine\":" + mine + "}"; }
-        private static String escape(String value) { return value.replace("\\", "\\\\").replace("\"", "\\\"").replace("\n", "\\n"); }
+    public record Message(String name, String text, String time, boolean mine) {
     }
 }
