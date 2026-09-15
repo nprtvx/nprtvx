@@ -62,7 +62,16 @@ public final class ChatServer {
         if (request == null || blank(request.accountId())) {
             throw badRequest("Account ID is required");
         }
-        Identity identity = identities.get(request.accountId().trim().toLowerCase(Locale.ROOT));
+        String accountId = request.accountId().trim().toLowerCase(Locale.ROOT);
+        Identity identity = identities.get(accountId);
+        if (identity == null && request.publicKey() != null && request.recoveryBundle() != null
+                && request.displayName() != null) {
+            RegisterRequest registration = new RegisterRequest(accountId, request.displayName(),
+                    request.publicKey(), request.recoveryBundle());
+            validateRegistration(registration);
+            identity = identities.computeIfAbsent(accountId,
+                    ignored -> new Identity(accountId, request.displayName(), request.publicKey(), request.recoveryBundle()));
+        }
         if (identity == null) {
             throw new ResponseStatusException(HttpStatus.NOT_FOUND, "Identity not found");
         }
@@ -371,7 +380,7 @@ public final class ChatServer {
     private record Group(String groupId, String name, String ownerAccountId, Set<String> members,
                          Map<String, String> memberKeys) {}
     public record RegisterRequest(String accountId, String displayName, String publicKey, String recoveryBundle) {}
-    public record RestoreRequest(String accountId) {}
+    public record RestoreRequest(String accountId, String displayName, String publicKey, String recoveryBundle) {}
     public record IdentityResponse(String accountId, String displayName, String publicKey, String recoveryBundle) {}
     public record PublicIdentity(String accountId, String displayName, String publicKey) {}
     public record EncryptedMessageRequest(String iv, String ciphertext, Integer expiresInSeconds) {}

@@ -362,6 +362,7 @@ authForm.addEventListener('submit', async (event) => {
       const registered = await api('/api/identity/register', { method: 'POST', body: JSON.stringify(generatedIdentity.identity) });
       localStorage.setItem('neonmonkey_identity', JSON.stringify({
         accountId: registered.accountId,
+        publicKey: registered.publicKey,
         recoveryBundle: registered.recoveryBundle,
         displayName: registered.displayName
       }));
@@ -375,9 +376,17 @@ authForm.addEventListener('submit', async (event) => {
     } else {
       const saved = JSON.parse(localStorage.getItem('neonmonkey_identity') || 'null');
       if (!saved?.accountId) throw new Error('This device has no saved NeonMonkey identity. Restore it on the device where you created it.');
-      const response = await api('/api/identity/restore', { method: 'POST', body: JSON.stringify({ accountId: saved.accountId }) });
-      const bundle = await decryptBundle(response.recoveryBundle, recoveryInput.value.trim());
+      const bundle = await decryptBundle(saved.recoveryBundle, recoveryInput.value.trim());
       currentPrivateKey = await importPrivateKey(bundle.privateKey);
+      const response = await api('/api/identity/restore', {
+        method: 'POST',
+        body: JSON.stringify({
+          accountId: saved.accountId,
+          displayName: saved.displayName,
+          publicKey: saved.publicKey,
+          recoveryBundle: saved.recoveryBundle
+        })
+      });
       showApp(response);
     }
   } catch (error) {
