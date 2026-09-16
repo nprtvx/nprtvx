@@ -350,6 +350,8 @@ mod browser {
     #[derive(Serialize)]
     #[serde(rename_all = "camelCase")]
     struct Register {
+        #[serde(rename = "protocolVersion")]
+        protocol_version: u16,
         account_id: String,
         username: String,
         password: String,
@@ -367,6 +369,8 @@ mod browser {
     #[derive(Serialize)]
     #[serde(rename_all = "camelCase")]
     struct MessageRequest {
+        #[serde(rename = "protocolVersion")]
+        protocol_version: u16,
         #[serde(rename = "messageId")]
         message_id: String,
         iv: String,
@@ -387,6 +391,7 @@ mod browser {
                     "POST",
                     "/api/auth/register",
                     Some(json(&Register {
+                        protocol_version: 1,
                         account_id: identity.account_id,
                         username,
                         password,
@@ -436,6 +441,7 @@ mod browser {
                 "POST",
                 &format!("/api/direct/{}", peer.account_id),
                 Some(json(&MessageRequest {
+                    protocol_version: 1,
                     message_id: uuid(&random_bytes(16)),
                     iv: base64(&random_bytes(12)),
                     ciphertext: base64(value.as_bytes()),

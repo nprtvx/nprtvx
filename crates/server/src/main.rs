@@ -29,6 +29,10 @@ struct AppConfig {
     static_dir: PathBuf,
 }
 
+fn default_protocol_version() -> u16 {
+    neonmonkey_core::PROTOCOL_VERSION
+}
+
 impl AppConfig {
     fn from_env() -> Result<Self, String> {
         let port = env::var("PORT")
@@ -208,6 +212,8 @@ struct Identity {
 
 #[derive(Debug, Deserialize)]
 struct RegisterRequest {
+    #[serde(rename = "protocolVersion", default = "default_protocol_version")]
+    protocol_version: u16,
     #[serde(rename = "accountId")]
     account_id: String,
     username: String,
@@ -256,6 +262,8 @@ struct Message {
 
 #[derive(Debug, Deserialize)]
 struct MessageRequest {
+    #[serde(rename = "protocolVersion", default = "default_protocol_version")]
+    protocol_version: u16,
     #[serde(rename = "messageId")]
     message_id: Option<String>,
     iv: String,
@@ -578,6 +586,11 @@ async fn post_message(
 ) -> Result<Json<Message>, ApiError> {
     validate_request_origin(&headers)?;
     let sender = authenticated_identity(&state, &headers).await?;
+    if request.protocol_version != neonmonkey_core::PROTOCOL_VERSION {
+        return Err(ApiError::bad_request(
+            "Unsupported message protocol version",
+        ));
+    }
     let recipient = recipient.to_lowercase();
     if !state.identities.read().await.contains_key(&recipient) {
         return Err(ApiError::new(
@@ -782,7 +795,8 @@ fn public_identity(identity: &Identity) -> serde_json::Value {
 
 fn validate_registration(request: &RegisterRequest) -> Result<(), ApiError> {
     let username = request.username.trim();
-    if request.account_id.trim().len() != 32
+    if request.protocol_version != neonmonkey_core::PROTOCOL_VERSION
+        || request.account_id.trim().len() != 32
         || !request
             .account_id
             .trim()
@@ -1024,6 +1038,7 @@ mod tests {
     #[test]
     fn registration_requires_hex_account_and_base64_identity_data() {
         let request = RegisterRequest {
+            protocol_version: 1,
             account_id: "not-an-account-id".into(),
             username: "alice".into(),
             password: "correct horse battery staple".into(),
