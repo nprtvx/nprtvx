@@ -522,6 +522,26 @@ mod browser {
         });
     }
 
+    fn start_polling(app: Rc<RefCell<App>>) {
+        let callback = Closure::wrap(Box::new(move || {
+            if app.borrow().me.is_none() {
+                return;
+            }
+            load_conversations(app.clone());
+            if app.borrow().peer.is_some() {
+                load_messages(app.clone());
+            }
+        }) as Box<dyn FnMut()>);
+        web_sys::window()
+            .unwrap()
+            .set_interval_with_callback_and_timeout_and_arguments_0(
+                callback.as_ref().unchecked_ref(),
+                5_000,
+            )
+            .expect("browser polling timer must be available");
+        callback.forget();
+    }
+
     impl LocalIdentity {
         fn generate() -> Self {
             Self {
@@ -618,6 +638,7 @@ mod browser {
         });
         show("auth-form-panel", false);
         show("app-shell", false);
-        restore_session(app);
+        restore_session(app.clone());
+        start_polling(app);
     }
 }
