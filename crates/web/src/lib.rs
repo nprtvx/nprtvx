@@ -506,9 +506,18 @@ mod browser {
 
     fn restore_session(app: Rc<RefCell<App>>) {
         spawn_local(async move {
-            if let Ok(identity) = request::<Identity>("GET", "/api/identity/me", None).await {
-                app.borrow_mut().me = Some(identity);
-                render_app(&app);
+            match request::<Identity>("GET", "/api/identity/me", None).await {
+                Ok(identity) => {
+                    app.borrow_mut().me = Some(identity);
+                    render_app(&app);
+                }
+                Err(message) if message.contains("HTTP 401") => {}
+                Err(message) => {
+                    error(
+                        "auth-error",
+                        &format!("Could not restore your session: {message}"),
+                    );
+                }
             }
         });
     }
