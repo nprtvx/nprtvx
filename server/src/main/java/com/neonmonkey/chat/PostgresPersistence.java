@@ -6,6 +6,8 @@ import org.springframework.core.io.ClassPathResource;
 import org.springframework.stereotype.Component;
 
 import java.io.IOException;
+import java.net.URI;
+import java.net.URLDecoder;
 import java.nio.charset.StandardCharsets;
 import java.sql.*;
 import java.util.*;
@@ -382,9 +384,34 @@ public final class PostgresPersistence {
     }
 
     private static String normalizeUrl(String url) {
-        if (url.startsWith("postgres://")) return "jdbc:postgresql://" + url.substring("postgres://".length());
-        if (url.startsWith("postgresql://")) return "jdbc:postgresql://" + url.substring("postgresql://".length());
+        if (url.startsWith("jdbc:postgresql://")) return url;
+        if (url.startsWith("postgres://") || url.startsWith("postgresql://")) {
+            URI parsed = URI.create(url);
+            String host = parsed.getHost();
+            if (host == null || parsed.getPath() == null || parsed.getPath().length() < 2) {
+                throw new IllegalArgumentException("DATABASE_URL must include a PostgreSQL host and database");
+            }
+            StringBuilder jdbc = new StringBuilder("jdbc:postgresql://").append(host);
+            if (parsed.getPort() > 0) jdbc.append(':').append(parsed.getPort());
+            jdbc.append(parsed.getPath());
+            String query = parsed.getQuery();
+            String userInfo = parsed.getUserInfo();
+            if (userInfo != null && userInfo.contains(":")) {
+                String[] credentials = userInfo.split(":", 2);
+                String separator = query == null || query.isBlank() ? "?" : "&";
+                jdbc.append(separator).append("user=").append(urlEncode(decode(credentials[0])))
+                        .append("&password=").append(urlEncode(decode(credentials[1])));
+            }
+            if (query != null && !query.isBlank()) {
+                jdbc.append(query.contains("=") && userInfo == null ? '?' : '&').append(query);
+            }
+            return jdbc.toString();
+        }
         return url;
+    }
+
+    private static String decode(String value) {
+        return URLDecoder.decode(value, StandardCharsets.UTF_8);
     }
 
     private static String firstNonBlank(String first, String second) {
