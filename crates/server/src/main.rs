@@ -656,7 +656,12 @@ async fn post_message(
         created_at,
         expires_at,
     };
-    persist_message(&state, &message).await?;
+    if !persist_message(&state, &message).await? {
+        return Err(ApiError::new(
+            StatusCode::CONFLICT,
+            "Message ID is already in use",
+        ));
+    }
     state.messages.write().await.push(message.clone());
     Ok(Json(message))
 }
@@ -876,14 +881,15 @@ async fn persist_identity(state: &AppState, identity: &Identity) -> Result<(), A
     Ok(())
 }
 
-async fn persist_message(state: &AppState, message: &Message) -> Result<(), ApiError> {
+async fn persist_message(state: &AppState, message: &Message) -> Result<bool, ApiError> {
     if let Some(pool) = &state.database {
-        sqlx::query(
+        let result = sqlx::query(
             "INSERT INTO encrypted_messages
              (message_id, conversation_id, sender_account_id, recipient_account_id, ciphertext, expires_at)
              VALUES ($1::uuid, gen_random_uuid(), $2, $3,
                      jsonb_build_object('iv', $4, 'ciphertext', $5),
-                     CASE WHEN $6 = 0 THEN NULL ELSE to_timestamp($6 / 1000.0) END)",
+                     CASE WHEN $6 = 0 THEN NULL ELSE to_timestamp($6 / 1000.0) END)
+             ON CONFLICT (message_id) DO NOTHING",
         )
         .bind(&message.message_id)
         .bind(&message.sender_account_id)
@@ -894,8 +900,9 @@ async fn persist_message(state: &AppState, message: &Message) -> Result<(), ApiE
         .execute(pool)
         .await
         .map_err(ApiError::database)?;
+        return Ok(result.rows_affected() == 1);
     }
-    Ok(())
+    Ok(true)
 }
 
 async fn initialize_schema(pool: &PgPool) -> Result<(), sqlx::Error> {
