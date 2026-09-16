@@ -25,6 +25,7 @@ jobs:
       - run: rustup target add wasm32-unknown-unknown
       - run: cargo install wasm-bindgen-cli --locked
       - run: crates/web/build.sh target/neonmonkey-web
+      - run: docker build --tag neonmonkey-ci .
 
   security:
     runs-on: ubuntu-latest
