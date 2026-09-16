@@ -439,13 +439,8 @@ async fn login(
         .trim()
         .trim_start_matches('@')
         .to_lowercase();
-    let identity = state
-        .identities
-        .read()
-        .await
-        .values()
-        .find(|item| item.username == username)
-        .cloned()
+    let identity = load_identity(&state, None, Some(&username))
+        .await?
         .ok_or_else(|| ApiError::new(StatusCode::UNAUTHORIZED, "Invalid username or password"))?;
     check_account_lockout(&state, &identity.username).await?;
     if !verify_password(&request.password, &identity.password_hash) {
