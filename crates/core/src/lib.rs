@@ -173,6 +173,21 @@ impl MessageEnvelope {
         Ok(())
     }
 
+    pub fn validate_canonical_associated_data(&self) -> Result<(), ModelError> {
+        self.validate()?;
+        if self.associated_data
+            != Self::associated_data_for(
+                &self.message_id,
+                &self.sender,
+                &self.recipient,
+                self.created_at_ms,
+            )
+        {
+            return Err(ModelError::InvalidAssociatedData);
+        }
+        Ok(())
+    }
+
     pub fn protocol_version(&self) -> u16 {
         self.protocol_version
     }
@@ -331,6 +346,20 @@ pub fn decrypt_from(
     )
 }
 
+pub fn decrypt_from_canonical(
+    recipient: &IdentityKeypair,
+    sender_public: &[u8; KEY_LENGTH],
+    envelope: &MessageEnvelope,
+) -> Result<Vec<u8>, CryptoError> {
+    envelope.validate_canonical_associated_data()?;
+    let key = derive_shared_key(recipient.secret(), sender_public)?;
+    decrypt(
+        &key,
+        &envelope.encrypted_payload(),
+        &envelope.associated_data,
+    )
+}
+
 pub fn new_message_id() -> String {
     let mut bytes = [0_u8; 16];
     OsRng.fill_bytes(&mut bytes);
@@ -412,6 +441,40 @@ mod tests {
             message_associated_data("message-1", &sender, &recipient, 123),
             message_associated_data("message-1", &sender, &recipient, 124)
         );
+    }
+
+    #[test]
+    fn canonical_associated_data_is_enforced_by_opt_in_decryption() {
+        let alice = IdentityKeypair::from_secret_bytes([1_u8; KEY_LENGTH]);
+        let bob = IdentityKeypair::from_secret_bytes([2_u8; KEY_LENGTH]);
+        let sender = IdentityId::new("alice").unwrap();
+        let recipient = IdentityId::new("bob").unwrap();
+        let message_id = new_message_id();
+        let created_at_ms = now_ms();
+        let aad = message_associated_data(&message_id, &sender, &recipient, created_at_ms);
+        let payload = encrypt_for(&alice, &bob.public_key(), b"hello", &aad).unwrap();
+        let envelope = MessageEnvelope {
+            message_id,
+            sender,
+            recipient,
+            created_at_ms,
+            protocol_version: PROTOCOL_VERSION,
+            nonce: payload.nonce,
+            ciphertext: payload.ciphertext,
+            associated_data: aad,
+        };
+        assert_eq!(
+            decrypt_from_canonical(&bob, &alice.public_key(), &envelope).unwrap(),
+            b"hello"
+        );
+        let mut tampered = envelope;
+        tampered.created_at_ms += 1;
+        assert!(matches!(
+            decrypt_from_canonical(&bob, &alice.public_key(), &tampered),
+            Err(CryptoError::InvalidEnvelope(
+                ModelError::InvalidAssociatedData
+            ))
+        ));
     }
 
     #[test]
