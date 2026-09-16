@@ -222,17 +222,22 @@ class AuthComponent {
     </main></div>
   `
 })
-class ShellComponent implements OnDestroy {
+class ShellComponent implements OnInit, OnDestroy {
   @Input() identity!: Identity;
   @Input() privateKey!: CryptoKey;
   @Output() logout = new EventEmitter<void>();
-  page = location.pathname === '/settings' ? 'settings' : 'messages'; chats: Chat[] = JSON.parse(localStorage.getItem('neonmonkey_chats') || '[]');
+  page = location.pathname === '/settings' ? 'settings' : 'messages'; chats: Chat[] = [];
   recipient?: Identity; recipientId = ''; error = ''; draft = ''; busy = false; messages: Message[] = []; timer?: number;
   initial(value: string): string { return (value || '?').slice(0, 1).toUpperCase(); }
+  async ngOnInit(): Promise<void> { await this.loadChats(); }
+  async loadChats(): Promise<void> {
+    const contacts = await request<Array<{ accountId: string; displayName: string }>>('/api/conversations');
+    this.chats = contacts.map((contact) => ({ accountId: contact.accountId, name: contact.displayName }));
+  }
   async startChat(): Promise<void> { try { await this.openChat(this.recipientId); this.recipientId = ''; } catch (caught) { this.error = caught instanceof Error ? caught.message : 'Recipient not found.'; } }
-  async openChat(id: string): Promise<void> { this.recipient = await request<Identity>(`/api/identity/${id.trim().toLowerCase()}`); this.chats = [{ accountId: this.recipient.accountId, name: this.recipient.displayName }, ...this.chats.filter((chat) => chat.accountId !== this.recipient?.accountId)]; localStorage.setItem('neonmonkey_chats', JSON.stringify(this.chats)); this.refresh(); if (!this.timer) this.timer = window.setInterval(() => this.refresh(), 2500); }
+  async openChat(id: string): Promise<void> { this.recipient = await request<Identity>(`/api/identity/${id.trim().toLowerCase()}`); this.refresh(); if (!this.timer) this.timer = window.setInterval(() => this.refresh(), 2500); }
   async refresh(): Promise<void> { if (!this.recipient) return; const data = await request<Array<{ senderAccountId: string; iv: string; ciphertext: string; createdAt: number }>>(`/api/direct/${this.recipient.accountId}`); this.messages = []; for (const item of data) { const sender = item.senderAccountId === this.identity.accountId ? this.identity : await request<Identity>(`/api/identity/${item.senderAccountId}`); this.messages.push({ id: `${item.createdAt}-${item.senderAccountId}`, name: sender.displayName, text: await decryptMessage(item, this.privateKey, await importPublic(JSON.parse(sender.publicKey))), time: new Date(item.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }), mine: item.senderAccountId === this.identity.accountId }); } }
-  async send(): Promise<void> { if (!this.recipient || !this.draft.trim() || this.busy) return; this.busy = true; try { const payload = await encryptMessage(this.draft.trim(), this.privateKey, await importPublic(JSON.parse(this.recipient.publicKey))); await request(`/api/direct/${this.recipient.accountId}`, { method: 'POST', body: JSON.stringify(payload) }); this.draft = ''; await this.refresh(); } catch (caught) { this.error = caught instanceof Error ? caught.message : 'Message could not be sent.'; } finally { this.busy = false; } }
+  async send(): Promise<void> { if (!this.recipient || !this.draft.trim() || this.busy) return; this.busy = true; try { const payload = await encryptMessage(this.draft.trim(), this.privateKey, await importPublic(JSON.parse(this.recipient.publicKey))); await request(`/api/direct/${this.recipient.accountId}`, { method: 'POST', body: JSON.stringify(payload) }); this.draft = ''; await this.loadChats(); await this.refresh(); } catch (caught) { this.error = caught instanceof Error ? caught.message : 'Message could not be sent.'; } finally { this.busy = false; } }
   ngOnDestroy(): void { if (this.timer) window.clearInterval(this.timer); }
 }
 

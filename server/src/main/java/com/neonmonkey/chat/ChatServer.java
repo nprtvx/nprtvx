@@ -226,6 +226,31 @@ public final class ChatServer {
         response.addCookie(cookie);
     }
 
+    @GetMapping("/api/conversations")
+    public List<PublicIdentity> listConversations(HttpServletRequest request) {
+        Identity current = requireIdentity(request);
+        Set<String> accountIds = new LinkedHashSet<>();
+        for (EncryptedMessage message : messages) {
+            if (message.senderAccountId().equals(current.accountId())) {
+                accountIds.add(message.recipientAccountId());
+            } else if (message.recipientAccountId().equals(current.accountId())) {
+                accountIds.add(message.senderAccountId());
+            }
+        }
+        List<PublicIdentity> conversations = new ArrayList<>();
+        for (String accountId : accountIds) {
+            Identity contact = identities.get(accountId);
+            if (contact == null) {
+                contact = persistence.findIdentity(accountId);
+                if (contact != null) identities.put(accountId, contact);
+            }
+            if (contact != null) {
+                conversations.add(new PublicIdentity(contact.accountId(), contact.displayName(), contact.publicKey()));
+            }
+        }
+        return conversations;
+    }
+
     @GetMapping("/api/direct/{recipientAccountId}")
     public List<EncryptedMessage> getDirectMessages(@PathVariable String recipientAccountId,
                                                     HttpServletRequest request) {
@@ -245,7 +270,12 @@ public final class ChatServer {
                                              @RequestBody(required = false) EncryptedMessageRequest request,
                                              HttpServletRequest httpRequest) {
         Identity identity = requireIdentity(httpRequest);
-        Identity recipient = identities.get(recipientAccountId.toLowerCase(Locale.ROOT));
+        String normalizedRecipientId = recipientAccountId.trim().toLowerCase(Locale.ROOT);
+        Identity recipient = identities.get(normalizedRecipientId);
+        if (recipient == null) {
+            recipient = persistence.findIdentity(normalizedRecipientId);
+            if (recipient != null) identities.put(normalizedRecipientId, recipient);
+        }
         if (recipient == null) {
             throw new ResponseStatusException(HttpStatus.NOT_FOUND, "Recipient identity not found");
         }
