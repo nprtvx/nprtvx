@@ -694,6 +694,18 @@ async fn post_message(
 async fn authenticated_identity(state: &AppState, headers: &HeaderMap) -> Result<String, ApiError> {
     let token = session_token(headers)
         .ok_or_else(|| ApiError::new(StatusCode::UNAUTHORIZED, "Authentication required"))?;
+    if let Some(pool) = &state.database {
+        return sqlx::query_scalar(
+            "SELECT trim(account_id)
+             FROM sessions
+             WHERE session_id::text = $1 AND expires_at > CURRENT_TIMESTAMP",
+        )
+        .bind(&token)
+        .fetch_optional(pool)
+        .await
+        .map_err(ApiError::database)?
+        .ok_or_else(|| ApiError::new(StatusCode::UNAUTHORIZED, "Invalid or expired session"));
+    }
     state
         .sessions
         .read()
@@ -707,13 +719,6 @@ async fn authenticated_identity(state: &AppState, headers: &HeaderMap) -> Result
 
 async fn create_session(state: &AppState, account_id: &str) -> Result<String, ApiError> {
     let token = uuid::Uuid::new_v4().to_string();
-    state.sessions.write().await.insert(
-        token.clone(),
-        Session {
-            account_id: account_id.to_string(),
-            expires_at: now_ms() + Duration::from_secs(30 * 24 * 60 * 60).as_millis() as i64,
-        },
-    );
     if let Some(pool) = &state.database {
         sqlx::query(
             "INSERT INTO sessions (session_id, account_id, expires_at)
@@ -725,6 +730,13 @@ async fn create_session(state: &AppState, account_id: &str) -> Result<String, Ap
         .await
         .map_err(ApiError::database)?;
     }
+    state.sessions.write().await.insert(
+        token.clone(),
+        Session {
+            account_id: account_id.to_string(),
+            expires_at: now_ms() + Duration::from_secs(30 * 24 * 60 * 60).as_millis() as i64,
+        },
+    );
     Ok(token)
 }
 
