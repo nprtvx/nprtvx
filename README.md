@@ -10,7 +10,8 @@ workspace:
 ```
 
 The CI workflow runs formatting, Clippy with warnings denied, workspace tests,
-workspace checks, and the browser WASM build on pushes and pull requests.
+workspace checks, the browser WASM build, and a RustSec advisory scan on pushes
+and pull requests.
 crates/core    shared typed identities, message envelopes, and X25519 + ChaCha20-Poly1305 API
 crates/server  Axum/Tokio production API and static-file server
 crates/web     Rust/WASM browser UI, API transport, and static browser shell
