@@ -34,8 +34,8 @@ mod browser {
     use wasm_bindgen::{closure::Closure, prelude::*, JsCast};
     use wasm_bindgen_futures::{spawn_local, JsFuture};
     use web_sys::{
-        Document, Element, Event, HtmlElement, HtmlInputElement, Request, RequestInit, RequestMode,
-        Response,
+        Document, Element, Event, Headers, HtmlElement, HtmlInputElement, Request, RequestInit,
+        RequestMode, Response,
     };
 
     #[derive(Clone, Debug, Deserialize, Serialize)]
@@ -125,14 +125,12 @@ mod browser {
         options.set_mode(RequestMode::SameOrigin);
         if let Some(body) = body {
             options.set_body(&body);
-            options.set_headers(
-                &js_sys::Object::from_entries(&Array::of2(
-                    &JsValue::from_str("Content-Type"),
-                    &JsValue::from_str("application/json"),
-                ))
-                .map_err(|_| "Could not set request headers".to_string())?
-                .into(),
-            );
+            let headers =
+                Headers::new().map_err(|_| "Could not set request headers".to_string())?;
+            headers
+                .set("Content-Type", "application/json")
+                .map_err(|_| "Could not set request headers".to_string())?;
+            options.set_headers(&headers);
         }
         let request = Request::new_with_str_and_init(path, &options)
             .map_err(|_| "Could not create request".to_string())?;
@@ -166,6 +164,22 @@ mod browser {
         app.borrow_mut().busy = busy;
         let button: HtmlElement = id("auth-submit").dyn_into().unwrap();
         button.set_text_content(Some(if busy { "Working…" } else { "Continue" }));
+    }
+
+    fn set_auth_mode(register: bool) {
+        text(
+            "auth-title",
+            if register {
+                "Create your account"
+            } else {
+                "Welcome back"
+            },
+        );
+        show("display-name-field", register);
+        input("display-name-input").set_required(register);
+        input("display-name-input").set_disabled(!register);
+        let button: HtmlElement = id("auth-submit").dyn_into().unwrap();
+        button.set_text_content(Some(if register { "Create account" } else { "Log in" }));
     }
 
     fn bind_click(name: &str, callback: impl FnMut(Event) + 'static) {
@@ -405,16 +419,17 @@ mod browser {
         bind_click("create-account-button", |_| {
             show("landing-actions", false);
             show("auth-form-panel", true);
-            text("auth-title", "Create your account");
+            set_auth_mode(true);
         });
         bind_click("restore-account-button", |_| {
             show("landing-actions", false);
             show("auth-form-panel", true);
-            text("auth-title", "Welcome back");
+            set_auth_mode(false);
         });
         bind_click("back-to-landing", |_| {
             show("landing-actions", true);
             show("auth-form-panel", false);
+            input("display-name-input").set_value("");
         });
         bind_click("logout-button", {
             let app = app.clone();
