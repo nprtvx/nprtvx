@@ -671,6 +671,13 @@ async fn post_message(
         let message_id = uuid::Uuid::parse_str(message_id)
             .map_err(|_| ApiError::bad_request("Message ID is invalid"))?
             .to_string();
+        if let Some(pool) = &state.database {
+            if let Some(existing) =
+                load_message_by_id(pool, &message_id, &sender, &recipient).await?
+            {
+                return Ok(Json(existing));
+            }
+        }
         if let Some(existing) = state
             .messages
             .read()
@@ -726,6 +733,18 @@ async fn post_message(
         expires_at,
     };
     if !persist_message(&state, &message).await? {
+        if let Some(pool) = &state.database {
+            if let Some(existing) = load_message_by_id(
+                pool,
+                &message.message_id,
+                &message.sender_account_id,
+                &message.recipient_account_id,
+            )
+            .await?
+            {
+                return Ok(Json(existing));
+            }
+        }
         return Err(ApiError::new(
             StatusCode::CONFLICT,
             "Message ID is already in use",
@@ -733,6 +752,46 @@ async fn post_message(
     }
     state.messages.write().await.push(message.clone());
     Ok(Json(message))
+}
+
+async fn load_message_by_id(
+    pool: &PgPool,
+    message_id: &str,
+    sender: &str,
+    recipient: &str,
+) -> Result<Option<Message>, ApiError> {
+    let row = sqlx::query(
+        "SELECT trim(sender_account_id) sender, trim(recipient_account_id) recipient,
+                message_id::text message_id, ciphertext->>'iv' iv,
+                ciphertext->>'ciphertext' ciphertext,
+                (extract(epoch from created_at) * 1000)::bigint created_at,
+                CASE WHEN expires_at IS NULL THEN NULL
+                     ELSE (extract(epoch from expires_at) * 1000)::bigint END expires_at
+         FROM encrypted_messages
+         WHERE message_id = $1::uuid
+           AND trim(sender_account_id) = $2
+           AND trim(recipient_account_id) = $3
+           AND (expires_at IS NULL OR expires_at > CURRENT_TIMESTAMP)",
+    )
+    .bind(message_id)
+    .bind(sender)
+    .bind(recipient)
+    .fetch_optional(pool)
+    .await
+    .map_err(ApiError::database)?;
+    row.map(|row| {
+        Ok(Message {
+            message_id: row.try_get("message_id")?,
+            sender_account_id: row.try_get("sender")?,
+            recipient_account_id: row.try_get("recipient")?,
+            iv: row.try_get("iv")?,
+            ciphertext: row.try_get("ciphertext")?,
+            created_at: row.try_get("created_at")?,
+            expires_at: row.try_get("expires_at")?,
+        })
+    })
+    .transpose()
+    .map_err(ApiError::database)
 }
 
 async fn authenticated_identity(state: &AppState, headers: &HeaderMap) -> Result<String, ApiError> {
