@@ -405,24 +405,30 @@ async fn register(
         recovery_bundle: request.recovery_bundle,
         password_hash: hash_password(&request.password)?,
     };
-    let mut identities = state.identities.write().await;
-    if identities.contains_key(&identity.account_id) {
-        return Err(ApiError::new(
-            StatusCode::CONFLICT,
-            "That identity already exists",
-        ));
-    }
-    if identities
-        .values()
-        .any(|item| item.username == identity.username)
-    {
-        return Err(ApiError::new(
-            StatusCode::CONFLICT,
-            "That username is already taken",
-        ));
+    if state.database.is_none() {
+        let identities = state.identities.read().await;
+        if identities.contains_key(&identity.account_id) {
+            return Err(ApiError::new(
+                StatusCode::CONFLICT,
+                "That identity already exists",
+            ));
+        }
+        if identities
+            .values()
+            .any(|item| item.username == identity.username)
+        {
+            return Err(ApiError::new(
+                StatusCode::CONFLICT,
+                "That username is already taken",
+            ));
+        }
     }
     persist_identity(&state, &identity).await?;
-    identities.insert(identity.account_id.clone(), identity.clone());
+    state
+        .identities
+        .write()
+        .await
+        .insert(identity.account_id.clone(), identity.clone());
     let token = create_session(&state, &identity.account_id).await?;
     Ok((cookie_header(token), Json(identity)))
 }
