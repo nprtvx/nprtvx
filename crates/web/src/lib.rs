@@ -485,15 +485,20 @@ mod browser {
                 None,
             )
             .await;
-            if let Ok(items) = result {
-                app.borrow_mut().older_before = items.first().map(|item| item.created_at);
-                show("load-older-button", items.len() == 100);
-                let messages = id("messages");
-                for item in items.into_iter().rev() {
-                    let row = document().create_element("div").unwrap();
-                    row.set_class_name("message-row");
-                    row.set_text_content(Some(&decode_text(&item.ciphertext)));
-                    messages.prepend_with_node_1(&row).unwrap();
+            match result {
+                Ok(items) => {
+                    app.borrow_mut().older_before = items.first().map(|item| item.created_at);
+                    show("load-older-button", items.len() == 100);
+                    let messages = id("messages");
+                    for item in items.into_iter().rev() {
+                        let row = document().create_element("div").unwrap();
+                        row.set_class_name("message-row");
+                        row.set_text_content(Some(&decode_text(&item.ciphertext)));
+                        messages.prepend_with_node_1(&row).unwrap();
+                    }
+                }
+                Err(message) => {
+                    error("recipient-error", &message);
                 }
             }
         });
