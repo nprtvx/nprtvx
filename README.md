@@ -17,6 +17,10 @@ crates/server  Axum/Tokio production API and static-file server
 crates/web     Rust/WASM browser UI, API transport, and static browser shell
 ```
 
+The container runs the server as a non-root `neonmonkey` user and exposes a
+`/health`-based container healthcheck. Docker Compose also waits for PostgreSQL
+and checks the application health endpoint before reporting the stack healthy.
+
 Run the Rust foundation with:
 
 ```bash
