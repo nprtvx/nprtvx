@@ -347,6 +347,7 @@ fn router(state: AppState) -> Router {
 }
 
 async fn security_headers(request: axum::http::Request<Body>, next: Next) -> Response {
+    let api_request = request.uri().path().starts_with("/api/");
     let mut response = next.run(request).await;
     let headers = response.headers_mut();
     headers.insert(
@@ -362,6 +363,10 @@ async fn security_headers(request: axum::http::Request<Body>, next: Next) -> Res
         header::CONTENT_SECURITY_POLICY,
         HeaderValue::from_static("default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; connect-src 'self'; frame-ancestors 'none'"),
     );
+    if api_request {
+        headers.insert(header::CACHE_CONTROL, HeaderValue::from_static("no-store"));
+        headers.insert(header::PRAGMA, HeaderValue::from_static("no-cache"));
+    }
     response
 }
 
@@ -488,7 +493,7 @@ async fn logout(
     Ok((
         [(
             header::SET_COOKIE,
-            "neonmonkey_session=; Max-Age=0; Path=/; HttpOnly; Secure",
+            "neonmonkey_session=; Max-Age=0; Path=/; HttpOnly; SameSite=Lax",
         )],
         Json(serde_json::json!({ "ok": true })),
     ))
@@ -1082,6 +1087,27 @@ mod tests {
             response.headers().get(header::X_FRAME_OPTIONS),
             Some(&HeaderValue::from_static("DENY"))
         );
+        let api_response = router(
+            AppState::new(AppConfig {
+                bind_addr: "127.0.0.1:8090".parse().unwrap(),
+                database_url: None,
+                redis_url: None,
+                static_dir: PathBuf::from("static"),
+            })
+            .await
+            .unwrap(),
+        )
+        .oneshot(
+            Request::get("/api/identity/me")
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+        assert_eq!(
+            api_response.headers().get(header::CACHE_CONTROL),
+            Some(&HeaderValue::from_static("no-store"))
+        );
     }
 
     #[tokio::test]
@@ -1305,5 +1331,18 @@ mod tests {
             .await
             .unwrap();
         assert_eq!(body.status(), StatusCode::NOT_FOUND);
+    }
+
+    #[test]
+    fn cookie_header_is_http_local_by_default() {
+        let cookie = cookie_header("token".into())
+            .get(header::SET_COOKIE)
+            .unwrap()
+            .to_str()
+            .unwrap()
+            .to_string();
+        assert!(cookie.contains("HttpOnly"));
+        assert!(cookie.contains("SameSite=Lax"));
+        assert!(!cookie.contains("Secure"));
     }
 }
