@@ -45,8 +45,8 @@ STATIC_DIR=target/neonmonkey-web cargo run -p neonmonkey-server
 The Rust server uses PostgreSQL when `DATABASE_URL` is configured and retains a
 small in-memory cache for fast reads. Sessions, identities, and encrypted direct
 messages are persisted using the existing schema. Expired sessions and messages
-are removed during startup. Redis is reported by `/health` but is not required
-for local development.
+are removed during startup and by the periodic runtime cleanup task. Redis is
+reported by `/health` but is not required for local development.
 
 The shared crypto is a conservative migration seam, not a claim of a complete
 secure messenger. It uses X25519 key agreement and authenticated
@@ -89,7 +89,7 @@ on a versioned, independently reviewed client cryptographic protocol.
 1. Username and password identity accounts (implemented)
 2. Encrypted one-to-one messaging (server envelope only; browser encryption pending)
 3. Encrypted group conversations (not implemented)
-4. Disappearing messages (expiry metadata and relay filtering implemented; cleanup is startup-based)
+4. Disappearing messages (expiry metadata, relay filtering, and periodic cleanup implemented)
 5. Encrypted attachments (not implemented)
 6. Emoji and privacy-preserving GIF integrations (not implemented)
 7. iOS and Android clients (not implemented)
