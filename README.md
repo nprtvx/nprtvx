@@ -7,7 +7,10 @@ NeonMonkey is being rebuilt as a privacy-first messaging service. The release is
 The Rust/Axum application and Rust/WASM browser client are built from this
 workspace:
 
-```text
+```
+
+The CI workflow runs formatting, Clippy with warnings denied, workspace tests,
+and workspace checks on pushes and pull requests.text
 crates/core    shared typed identities, message envelopes, and X25519 + ChaCha20-Poly1305 API
 crates/server  Axum/Tokio production API and static-file server
 crates/web     Rust/WASM browser UI, API transport, and static browser shell

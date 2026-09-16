@@ -66,6 +66,7 @@ struct AppState {
     sessions: Arc<RwLock<HashMap<String, Session>>>,
     messages: Arc<RwLock<Vec<Message>>>,
     auth_attempts: Arc<RwLock<HashMap<String, RateWindow>>>,
+    auth_failures: Arc<RwLock<HashMap<String, FailureWindow>>>,
 }
 
 impl AppState {
@@ -85,6 +86,7 @@ impl AppState {
             sessions: Arc::new(RwLock::new(HashMap::new())),
             messages: Arc::new(RwLock::new(Vec::new())),
             auth_attempts: Arc::new(RwLock::new(HashMap::new())),
+            auth_failures: Arc::new(RwLock::new(HashMap::new())),
         };
         state.load_cache().await?;
         Ok(state)
@@ -180,6 +182,10 @@ impl AppState {
             .write()
             .await
             .retain(|_, window| now - window.started_at < 60_000);
+        self.auth_failures
+            .write()
+            .await
+            .retain(|_, window| window.locked_until > now || window.failures < 5);
         if let Some(pool) = &self.database {
             sqlx::query("DELETE FROM sessions WHERE expires_at <= CURRENT_TIMESTAMP")
                 .execute(pool)
@@ -242,6 +248,12 @@ struct Session {
 struct RateWindow {
     started_at: i64,
     attempts: u32,
+}
+
+#[derive(Clone, Debug)]
+struct FailureWindow {
+    failures: u32,
+    locked_until: i64,
 }
 
 #[derive(Clone, Debug, Serialize)]
@@ -429,13 +441,16 @@ async fn login(
         .values()
         .find(|item| item.username == username)
         .cloned()
-        .ok_or_else(|| ApiError::new(StatusCode::NOT_FOUND, "Account not found"))?;
+        .ok_or_else(|| ApiError::new(StatusCode::UNAUTHORIZED, "Invalid username or password"))?;
+    check_account_lockout(&state, &identity.username).await?;
     if !verify_password(&request.password, &identity.password_hash) {
+        record_auth_failure(&state, &identity.username).await;
         return Err(ApiError::new(
             StatusCode::UNAUTHORIZED,
             "Invalid username or password",
         ));
     }
+    state.auth_failures.write().await.remove(&identity.username);
     let token = create_session(&state, &identity.account_id).await?;
     Ok((cookie_header(token), Json(identity)))
 }
@@ -502,6 +517,9 @@ async fn lookup_identity(
 ) -> Result<Json<serde_json::Value>, ApiError> {
     let current = authenticated_identity(&state, &headers).await?;
     let value = query.q.trim().trim_start_matches('@').to_lowercase();
+    if value.is_empty() || value.len() > 128 {
+        return Err(ApiError::bad_request("Identity lookup is invalid"));
+    }
     let identity = state
         .identities
         .read()
@@ -554,6 +572,7 @@ async fn list_messages(
 ) -> Result<Json<Vec<Message>>, ApiError> {
     let current = authenticated_identity(&state, &headers).await?;
     let recipient = recipient.to_lowercase();
+    validate_account_id(&recipient)?;
     let limit = query.limit.unwrap_or(100).clamp(1, 100);
     let mut messages: Vec<_> = state
         .messages
@@ -592,6 +611,7 @@ async fn post_message(
         ));
     }
     let recipient = recipient.to_lowercase();
+    validate_account_id(&recipient)?;
     if !state.identities.read().await.contains_key(&recipient) {
         return Err(ApiError::new(
             StatusCode::NOT_FOUND,
@@ -741,6 +761,7 @@ async fn check_auth_rate_limit(state: &AppState, headers: &HeaderMap) -> Result<
         window.started_at = now;
         window.attempts = 0;
     }
+
     window.attempts += 1;
     if window.attempts > 10 {
         return Err(ApiError::new(
@@ -749,6 +770,33 @@ async fn check_auth_rate_limit(state: &AppState, headers: &HeaderMap) -> Result<
         ));
     }
     Ok(())
+}
+
+async fn check_account_lockout(state: &AppState, username: &str) -> Result<(), ApiError> {
+    if let Some(window) = state.auth_failures.read().await.get(username) {
+        if window.locked_until > now_ms() {
+            return Err(ApiError::new(
+                StatusCode::TOO_MANY_REQUESTS,
+                "Account temporarily locked",
+            ));
+        }
+    }
+    Ok(())
+}
+
+async fn record_auth_failure(state: &AppState, username: &str) {
+    let now = now_ms();
+    let mut failures = state.auth_failures.write().await;
+    let window = failures
+        .entry(username.to_string())
+        .or_insert(FailureWindow {
+            failures: 0,
+            locked_until: 0,
+        });
+    window.failures += 1;
+    if window.failures >= 5 {
+        window.locked_until = now + 15 * 60 * 1000;
+    }
 }
 
 fn validate_request_origin(headers: &HeaderMap) -> Result<(), ApiError> {
@@ -801,34 +849,45 @@ fn public_identity(identity: &Identity) -> serde_json::Value {
 fn validate_registration(request: &RegisterRequest) -> Result<(), ApiError> {
     let username = request.username.trim();
     if request.protocol_version != neonmonkey_core::PROTOCOL_VERSION
-        || request.account_id.trim().len() != 32
-        || !request
-            .account_id
-            .trim()
-            .chars()
-            .all(|character| character.is_ascii_hexdigit())
+        || validate_account_id(request.account_id.trim()).is_err()
         || !(3..=24).contains(&username.len())
         || !username.chars().all(|character| {
             character.is_ascii_lowercase() || character.is_ascii_digit() || character == '_'
         })
         || !(8..=128).contains(&request.password.len())
         || request.display_name.trim().is_empty()
-        || !valid_base64(&request.public_key)
-        || !valid_base64(&request.recovery_bundle)
+        || !valid_base64_length(&request.public_key, 32)
+        || !valid_base64_length(&request.recovery_bundle, 1_000_000)
     {
         return Err(ApiError::bad_request(
             "Invalid account, username, password, or identity data",
         ));
     }
+
+    fn validate_account_id(value: &str) -> Result<(), ApiError> {
+        if value.len() != 32 || !value.chars().all(|character| character.is_ascii_hexdigit()) {
+            return Err(ApiError::bad_request("Account ID is invalid"));
+        }
+        Ok(())
+    }
     Ok(())
 }
 
-fn valid_base64(value: &str) -> bool {
-    !value.is_empty()
-        && value.len() <= 100_000
-        && base64::engine::general_purpose::STANDARD
-            .decode(value)
-            .is_ok()
+fn validate_account_id(value: &str) -> Result<(), ApiError> {
+    if value.len() != 32 || !value.chars().all(|character| character.is_ascii_hexdigit()) {
+        return Err(ApiError::bad_request("Account ID is invalid"));
+    }
+    Ok(())
+}
+
+fn valid_base64_length(value: &str, expected_or_max: usize) -> bool {
+    if value.is_empty() {
+        return false;
+    }
+    let Ok(decoded) = base64::engine::general_purpose::STANDARD.decode(value) else {
+        return false;
+    };
+    decoded.len() == expected_or_max || (expected_or_max > 32 && decoded.len() <= expected_or_max)
 }
 
 fn decode_payload(value: &str, max_decoded_length: usize) -> Result<Vec<u8>, ApiError> {
@@ -1125,6 +1184,60 @@ mod tests {
                 .unwrap_err()
                 .status,
             StatusCode::TOO_MANY_REQUESTS
+        );
+    }
+
+    #[tokio::test]
+    async fn account_lockout_triggers_after_repeated_failures() {
+        let state = AppState::new(AppConfig {
+            bind_addr: "127.0.0.1:8090".parse().unwrap(),
+            database_url: None,
+            redis_url: None,
+            static_dir: PathBuf::from("static"),
+        })
+        .await
+        .unwrap();
+        for _ in 0..5 {
+            record_auth_failure(&state, "alice").await;
+        }
+        assert_eq!(
+            check_account_lockout(&state, "alice")
+                .await
+                .unwrap_err()
+                .status,
+            StatusCode::TOO_MANY_REQUESTS
+        );
+    }
+
+    #[test]
+    fn identity_lookup_rejects_empty_and_oversized_values() {
+        let empty = LookupQuery { q: "  ".into() };
+        let oversized = LookupQuery { q: "a".repeat(129) };
+        assert!(empty.q.trim().is_empty());
+        assert!(oversized.q.len() > 128);
+    }
+
+    #[test]
+    fn account_ids_require_exactly_32_hex_characters() {
+        assert!(validate_account_id("a".repeat(32).as_str()).is_ok());
+        assert!(validate_account_id("a".repeat(31).as_str()).is_err());
+        assert!(validate_account_id(&"g".repeat(32)).is_err());
+    }
+
+    #[test]
+    fn registration_rejects_unsupported_protocol_versions() {
+        let request = RegisterRequest {
+            protocol_version: neonmonkey_core::PROTOCOL_VERSION + 1,
+            account_id: "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa".into(),
+            username: "alice".into(),
+            password: "correct horse battery staple".into(),
+            display_name: "Alice".into(),
+            public_key: "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=".into(),
+            recovery_bundle: "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=".into(),
+        };
+        assert_eq!(
+            validate_registration(&request).unwrap_err().status,
+            StatusCode::BAD_REQUEST
         );
     }
 
