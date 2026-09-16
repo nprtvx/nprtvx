@@ -391,9 +391,13 @@ public final class PostgresPersistence {
             if (host == null || parsed.getPath() == null || parsed.getPath().length() < 2) {
                 throw new IllegalArgumentException("DATABASE_URL must include a PostgreSQL host and database");
             }
+            String database = parsed.getPath().substring(1);
+            if ("database".equalsIgnoreCase(database)) {
+                database = valueOrDefault("DATABASE_NAME", "neonmonkey");
+            }
             StringBuilder jdbc = new StringBuilder("jdbc:postgresql://").append(host);
             if (parsed.getPort() > 0) jdbc.append(':').append(parsed.getPort());
-            jdbc.append(parsed.getPath());
+            jdbc.append('/').append(database);
             String query = parsed.getQuery();
             String userInfo = parsed.getUserInfo();
             if (userInfo != null && userInfo.contains(":")) {
