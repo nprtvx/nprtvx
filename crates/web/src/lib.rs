@@ -45,6 +45,7 @@ mod browser {
         username: String,
         display_name: String,
         public_key: String,
+        #[serde(default)]
         recovery_bundle: String,
     }
 
@@ -103,16 +104,35 @@ mod browser {
         bytes.iter().map(|byte| format!("{byte:02x}")).collect()
     }
 
+    fn uuid(bytes: &[u8]) -> String {
+        let value = hex(bytes);
+        format!(
+            "{}-{}-{}-{}-{}",
+            &value[0..8],
+            &value[8..12],
+            &value[12..16],
+            &value[16..20],
+            &value[20..32]
+        )
+    }
+
     fn base64(bytes: &[u8]) -> String {
         let array = Array::new();
         for byte in bytes {
             array.push(&JsValue::from_f64(*byte as f64));
         }
+
         js_sys::Function::new_with_args("a", "return btoa(String.fromCharCode.apply(null, a));")
             .call1(&JsValue::NULL, &array)
             .unwrap()
             .as_string()
             .unwrap()
+    }
+
+    fn encode_query(value: &str) -> String {
+        js_sys::encode_uri_component(value)
+            .as_string()
+            .unwrap_or_default()
     }
 
     async fn request<T: DeserializeOwned>(
@@ -281,28 +301,31 @@ mod browser {
                 request("GET", &format!("/api/direct/{}", peer.account_id), None).await;
             let messages = id("messages");
             messages.set_inner_html("");
-            if let Ok(items) = result {
-                for item in items {
-                    let mine =
-                        app.borrow().me.as_ref().unwrap().account_id == item.sender_account_id;
-                    let row = document().create_element("div").unwrap();
-                    row.set_class_name(if mine {
-                        "message-row mine"
-                    } else {
-                        "message-row"
-                    });
-                    let body = decode_text(&item.ciphertext);
-                    row.set_inner_html(&format!(
+            match result {
+                Ok(items) => {
+                    for item in items {
+                        let mine =
+                            app.borrow().me.as_ref().unwrap().account_id == item.sender_account_id;
+                        let row = document().create_element("div").unwrap();
+                        row.set_class_name(if mine {
+                            "message-row mine"
+                        } else {
+                            "message-row"
+                        });
+                        let body = decode_text(&item.ciphertext);
+                        row.set_inner_html(&format!(
                         "<div class=\"message\"><div class=\"message-meta\"><strong>{}</strong><time>{}</time></div><p class=\"message-text\"></p></div>",
                         if mine { "You" } else { &peer.display_name },
                         format_time(item.created_at)
                     ));
-                    row.query_selector(".message-text")
-                        .unwrap()
-                        .unwrap()
-                        .set_text_content(Some(&body));
-                    messages.append_child(&row).unwrap();
+                        row.query_selector(".message-text")
+                            .unwrap()
+                            .unwrap()
+                            .set_text_content(Some(&body));
+                        messages.append_child(&row).unwrap();
+                    }
                 }
+                Err(message) => error("recipient-error", &message),
             }
         });
     }
@@ -344,6 +367,8 @@ mod browser {
     #[derive(Serialize)]
     #[serde(rename_all = "camelCase")]
     struct MessageRequest {
+        #[serde(rename = "messageId")]
+        message_id: String,
         iv: String,
         ciphertext: String,
         expires_in_seconds: Option<i64>,
@@ -411,14 +436,25 @@ mod browser {
                 "POST",
                 &format!("/api/direct/{}", peer.account_id),
                 Some(json(&MessageRequest {
+                    message_id: uuid(&random_bytes(16)),
                     iv: base64(&random_bytes(12)),
                     ciphertext: base64(value.as_bytes()),
                     expires_in_seconds: expiry,
                 })),
             )
             .await;
-            if result.is_ok() {
-                load_messages(app);
+            match result {
+                Ok(_) => load_messages(app),
+                Err(message) => error("recipient-error", &message),
+            }
+        });
+    }
+
+    fn restore_session(app: Rc<RefCell<App>>) {
+        spawn_local(async move {
+            if let Ok(identity) = request::<Identity>("GET", "/api/identity/me", None).await {
+                app.borrow_mut().me = Some(identity);
+                render_app(&app);
             }
         });
     }
@@ -499,7 +535,7 @@ mod browser {
                 spawn_local(async move {
                     match request::<Identity>(
                         "GET",
-                        &format!("/api/identity/lookup?q={query}"),
+                        &format!("/api/identity/lookup?q={}", encode_query(&query)),
                         None,
                     )
                     .await
@@ -515,5 +551,6 @@ mod browser {
         });
         show("auth-form-panel", false);
         show("app-shell", false);
+        restore_session(app);
     }
 }

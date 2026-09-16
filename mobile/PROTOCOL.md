@@ -1,13 +1,23 @@
 # NeonMonkey mobile protocol
 
-The web client and future iOS/Android clients use the same JSON API and cryptographic contract:
+The repository currently has two incompatible protocol descriptions. Until the
+versioned protocol and cryptographic review are complete, native clients must
+not claim interoperability with the browser:
 
-- Identity: client-generated P-256 ECDH key pair.
-- Account ID: first 32 hexadecimal characters of SHA-256(public JWK JSON).
-- Recovery: client encrypts the private-key bundle with AES-GCM using a PBKDF2-derived recovery key.
-- Direct messages: ECDH-derived AES-GCM key; only `{iv, ciphertext}` crosses the API.
-- Group messages: a random AES-GCM group key, wrapped separately for each member with an ECDH-derived AES-GCM key.
-- Attachments: encrypted in the client before upload with the same conversation key.
-- Expiry: `expiresInSeconds` is metadata for relay cleanup and client display.
+- The current Rust foundation uses X25519 identity keys and
+  ChaCha20-Poly1305 envelopes in `crates/core`.
+- The current browser is still a migration client and sends placeholder
+  base64 fields; those fields are not end-to-end encrypted.
+- This document's former P-256/AES-GCM design is a proposal, not an implemented
+  contract.
 
-Native clients must use platform secure storage for the private key and recovery state. They must not log private keys, recovery phrases, plaintext messages, or decrypted attachments.
+Before native implementation begins, the protocol work must choose one
+versioned contract and publish canonical test vectors for identity generation,
+recovery, direct messages, groups, attachments, replay handling, expiry, and
+key rotation. Native clients must reject unknown protocol versions rather than
+silently falling back.
+
+Native clients must use platform secure storage for the private key and
+recovery state. They must not log private keys, recovery phrases, plaintext
+messages, or decrypted attachments. No native client should ship until the
+protocol has independent cryptographic review and interoperability tests.

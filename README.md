@@ -21,6 +21,7 @@ cargo check --workspace
 cargo test --workspace
 cargo run -p neonmonkey-server
 curl http://127.0.0.1:8090/health
+curl http://127.0.0.1:8090/ready
 ```
 
 Build the browser assets (requires `wasm32-unknown-unknown` and
@@ -35,8 +36,9 @@ STATIC_DIR=target/neonmonkey-web cargo run -p neonmonkey-server
 
 The Rust server uses PostgreSQL when `DATABASE_URL` is configured and retains a
 small in-memory cache for fast reads. Sessions, identities, and encrypted direct
-messages are persisted using the existing schema. Redis is reported by `/health`
-but is not required for this first production cutover.
+messages are persisted using the existing schema. Expired sessions and messages
+are removed during startup. Redis is reported by `/health` but is not required
+for local development.
 
 The shared crypto is a conservative migration seam, not a claim of a complete
 secure messenger. It uses X25519 key agreement and authenticated
@@ -69,21 +71,21 @@ The account flow uses a username and password without email or phone signup:
 - The server stores a salted PBKDF2 password hash and the encrypted recovery bundle.
 - The password is never stored or returned by the server.
 
-The current Rust client base64-encodes message text for the existing encrypted
-message API shape. It is a migration-compatible transport placeholder and must
-not be treated as end-to-end encrypted until the encrypted message transport
-piece is deployed.
+The current browser client still base64-encodes message text for the existing
+message API shape. This is a migration-compatible transport placeholder and
+must not be treated as end-to-end encrypted. Production release remains blocked
+on a versioned, independently reviewed client cryptographic protocol.
 
-## Release pieces
+## Release pieces and status
 
-1. Username and password identity accounts (current)
-2. Encrypted one-to-one messaging
-3. Encrypted group conversations
-4. Disappearing messages
-5. Encrypted attachments
-6. Emoji and privacy-preserving GIF integrations
-7. iOS and Android clients
-8. Security review and final release
+1. Username and password identity accounts (implemented)
+2. Encrypted one-to-one messaging (server envelope only; browser encryption pending)
+3. Encrypted group conversations (not implemented)
+4. Disappearing messages (expiry metadata and relay filtering implemented; cleanup is startup-based)
+5. Encrypted attachments (not implemented)
+6. Emoji and privacy-preserving GIF integrations (not implemented)
+7. iOS and Android clients (not implemented)
+8. Security review and final release (blocked on the preceding items)
 
 ## Deploy on Render
 
@@ -126,6 +128,10 @@ GIF_PROVIDER_KEY=<server-side provider key>
 
 The browser never receives the provider key. Without these variables, emoji remains available and GIF search returns no results.
 
+For local HTTP development, the session cookie does not use the `Secure`
+attribute by default. Set `NEONMONKEY_COOKIE_SECURE=true` whenever the service
+is behind HTTPS.
+
 ## Optional PostgreSQL persistence
 
 The app uses in-memory storage when no database URL is configured, so local development
@@ -135,8 +141,9 @@ attachments, groups, group members, and group messages across restarts, set eith
 `postgres://...` format.
 
 The normalized schema is in `db/schema.sql` and is applied automatically when a database
-URL is present. For a Render Blueprint, attach a PostgreSQL database and expose its
-connection string as `DATABASE_URL`.
+URL is present. Statements are tracked in the `schema_migrations` table so restarts do
+not reapply completed schema steps. For a Render Blueprint, attach a PostgreSQL database
+and expose its connection string as `DATABASE_URL`.
 
 ### Docker Compose PostgreSQL
 

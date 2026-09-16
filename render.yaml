@@ -14,6 +14,8 @@ services:
           property: connectionString
       - key: STATIC_DIR
         value: /app/static
+      - key: NEONMONKEY_COOKIE_SECURE
+        value: "true"
 
 databases:
   - name: neonmonkey-db
