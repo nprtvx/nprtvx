@@ -213,7 +213,10 @@ class AuthComponent {
   template: `
     <div class="app"><aside class="sidebar"><div class="brand"><span class="brand-mark">nm</span> neonmonkey</div>
       <nav><button class="nav" [class.active]="page === 'messages'" (click)="page = 'messages'">▦ <span>Messages</span></button><button class="nav" [class.active]="page === 'settings'" (click)="page = 'settings'">⚙ <span>Settings</span></button></nav>
-      <span class="eyebrow chats-label">YOUR CHATS</span><div class="chat-list"><button class="chat-link" *ngFor="let chat of chats" (click)="openChat(chat.accountId)"><i>↗</i>{{ chat.name }}</button><span class="empty" *ngIf="!chats.length">No chats yet</span></div>
+      <div class="chat-heading"><span class="eyebrow">YOUR CHATS</span><button class="add-chat" type="button" (click)="showAddChat = !showAddChat" aria-label="Add new chat">+</button></div>
+      <form class="sidebar-add" *ngIf="showAddChat" (ngSubmit)="addChat()"><input name="newChat" [(ngModel)]="recipientId" placeholder="@username or account ID" autocomplete="off"><button type="submit">Add</button></form>
+      <p class="error sidebar-error" *ngIf="error && showAddChat">{{ error }}</p>
+      <div class="chat-list"><button class="chat-link" *ngFor="let chat of chats" (click)="openChat(chat.accountId)"><i>↗</i>{{ chat.name }}</button><span class="empty" *ngIf="!chats.length">No chats yet</span></div>
       <div class="profile"><div class="avatar">{{ initial(identity.displayName) }}</div><div><strong>{{ identity.displayName }}</strong><small>&#64;{{ identity.username }}</small></div><button class="lock" (click)="logout.emit()">Log out</button></div>
     </aside><main class="main"><header><span class="eyebrow">NEONMONKEY</span><h1>{{ page === 'settings' ? 'Your profile' : recipient?.displayName || 'Messages' }}</h1><p>Private conversations, encrypted on your device.</p></header>
       <app-settings *ngIf="page === 'settings'" [identity]="identity" (logout)="logout.emit()"></app-settings>
@@ -227,7 +230,7 @@ class ShellComponent implements OnInit, OnDestroy {
   @Input() privateKey!: CryptoKey;
   @Output() logout = new EventEmitter<void>();
   page = location.pathname === '/settings' ? 'settings' : 'messages'; chats: Chat[] = [];
-  recipient?: Identity; recipientId = ''; error = ''; draft = ''; busy = false; messages: Message[] = []; timer?: number;
+  recipient?: Identity; recipientId = ''; error = ''; draft = ''; busy = false; messages: Message[] = []; timer?: number; showAddChat = false;
   initial(value: string): string { return (value || '?').slice(0, 1).toUpperCase(); }
   async ngOnInit(): Promise<void> { await this.loadChats(); }
   async loadChats(): Promise<void> {
@@ -235,7 +238,14 @@ class ShellComponent implements OnInit, OnDestroy {
     this.chats = contacts.map((contact) => ({ accountId: contact.accountId, name: contact.displayName }));
   }
   async startChat(): Promise<void> { try { await this.openChat(this.recipientId); this.recipientId = ''; } catch (caught) { this.error = caught instanceof Error ? caught.message : 'Recipient not found.'; } }
-  async openChat(id: string): Promise<void> { this.recipient = await request<Identity>(`/api/identity/${id.trim().toLowerCase()}`); this.refresh(); if (!this.timer) this.timer = window.setInterval(() => this.refresh(), 2500); }
+  async addChat(): Promise<void> { this.error = ''; try { await this.openChat(this.recipientId); this.recipientId = ''; this.showAddChat = false; } catch (caught) { this.error = caught instanceof Error ? caught.message : 'User not found.'; } }
+  async openChat(id: string): Promise<void> {
+    const value = id.trim();
+    const found = await request<Identity>(`/api/identity/lookup?q=${encodeURIComponent(value)}`);
+    this.recipient = found;
+    this.refresh();
+    if (!this.timer) this.timer = window.setInterval(() => this.refresh(), 2500);
+  }
   async refresh(): Promise<void> { if (!this.recipient) return; const data = await request<Array<{ senderAccountId: string; iv: string; ciphertext: string; createdAt: number }>>(`/api/direct/${this.recipient.accountId}`); this.messages = []; for (const item of data) { const sender = item.senderAccountId === this.identity.accountId ? this.identity : await request<Identity>(`/api/identity/${item.senderAccountId}`); this.messages.push({ id: `${item.createdAt}-${item.senderAccountId}`, name: sender.displayName, text: await decryptMessage(item, this.privateKey, await importPublic(JSON.parse(sender.publicKey))), time: new Date(item.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }), mine: item.senderAccountId === this.identity.accountId }); } }
   async send(): Promise<void> { if (!this.recipient || !this.draft.trim() || this.busy) return; this.busy = true; try { const payload = await encryptMessage(this.draft.trim(), this.privateKey, await importPublic(JSON.parse(this.recipient.publicKey))); await request(`/api/direct/${this.recipient.accountId}`, { method: 'POST', body: JSON.stringify(payload) }); this.draft = ''; await this.loadChats(); await this.refresh(); } catch (caught) { this.error = caught instanceof Error ? caught.message : 'Message could not be sent.'; } finally { this.busy = false; } }
   ngOnDestroy(): void { if (this.timer) window.clearInterval(this.timer); }

@@ -193,6 +193,28 @@ public final class ChatServer {
         return new PublicIdentity(identity.accountId(), identity.displayName(), identity.publicKey());
     }
 
+    @GetMapping("/api/identity/lookup")
+    public PublicIdentity lookupIdentity(@RequestParam String q, HttpServletRequest request) {
+        Identity current = requireIdentity(request);
+        String value = q == null ? "" : q.trim();
+        Identity identity;
+        if (value.matches("[a-fA-F0-9]{32}")) {
+            identity = identities.get(value.toLowerCase(Locale.ROOT));
+            if (identity == null) identity = persistence.findIdentity(value.toLowerCase(Locale.ROOT));
+        } else {
+            String username = normalizeUsername(value.startsWith("@") ? value.substring(1) : value);
+            identity = identities.values().stream()
+                    .filter(candidate -> username.equals(candidate.username()))
+                    .findFirst()
+                    .orElseGet(() -> persistence.findIdentityByUsername(username));
+        }
+        if (identity != null) identities.put(identity.accountId(), identity);
+        if (identity == null || identity.accountId().equals(current.accountId())) {
+            throw new ResponseStatusException(HttpStatus.NOT_FOUND, "No other NeonMonkey user matched that username or account ID");
+        }
+        return new PublicIdentity(identity.accountId(), identity.displayName(), identity.publicKey());
+    }
+
     @GetMapping("/api/gifs/search")
     public List<GifResult> searchGifs(@RequestParam(defaultValue = "") String q,
                                       HttpServletRequest request) {
