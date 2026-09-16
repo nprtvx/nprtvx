@@ -2,19 +2,62 @@
 
 NeonMonkey is being rebuilt as a privacy-first messaging service. The release is being delivered in pieces so each security-sensitive layer can be reviewed before the final release.
 
-## Run
+## Rust application
 
-Requires JDK 17 or newer and Maven.
+The Rust/Axum application and Rust/WASM browser client are built from this
+workspace:
 
-```bash
-mvn spring-boot:run
+```text
+crates/core    shared typed identities, message envelopes, and X25519 + ChaCha20-Poly1305 API
+crates/server  Axum/Tokio production API and static-file server
+crates/web     Rust/WASM browser UI, API transport, and static browser shell
 ```
 
-Open http://localhost:8080.
+Run the Rust foundation with:
 
-The browser interface is a standalone Angular application. The Docker build compiles
-`frontend/` with Angular and copies the production bundle into Spring Boot's static
-resources; Spring Boot continues to provide the API and PostgreSQL persistence.
+```bash
+cargo fmt --all -- --check
+cargo check --workspace
+cargo test --workspace
+cargo run -p neonmonkey-server
+curl http://127.0.0.1:8090/health
+```
+
+Build the browser assets (requires `wasm32-unknown-unknown` and
+`wasm-bindgen-cli`):
+
+```bash
+rustup target add wasm32-unknown-unknown
+cargo install wasm-bindgen-cli
+crates/web/build.sh target/neonmonkey-web
+STATIC_DIR=target/neonmonkey-web cargo run -p neonmonkey-server
+```
+
+The Rust server uses PostgreSQL when `DATABASE_URL` is configured and retains a
+small in-memory cache for fast reads. Sessions, identities, and encrypted direct
+messages are persisted using the existing schema. Redis is reported by `/health`
+but is not required for this first production cutover.
+
+The shared crypto is a conservative migration seam, not a claim of a complete
+secure messenger. It uses X25519 key agreement and authenticated
+ChaCha20-Poly1305, but does not implement audited X3DH, pre-key bundles, replay
+protection, or the Double Ratchet. Those protocol pieces require design,
+independent review, and interoperability tests before replacing the current
+application. The browser client is compiled to WebAssembly and served directly by Axum.
+
+## Run
+
+Requires Rust 1.98 or newer and Cargo.
+
+```bash
+cargo run -p neonmonkey-server
+```
+
+Open http://localhost:8090.
+
+The browser interface is a Rust/WASM application. `crates/web/build.sh` emits
+`index.html`, `style.css`, the wasm-bindgen JavaScript loader, and the WASM
+binary into a directory that Axum serves with `STATIC_DIR`.
 
 ## Current piece: username and password accounts
 
@@ -26,7 +69,10 @@ The account flow uses a username and password without email or phone signup:
 - The server stores a salted PBKDF2 password hash and the encrypted recovery bundle.
 - The password is never stored or returned by the server.
 
-The message transport is still the legacy plaintext placeholder at this stage. It must not be treated as end-to-end encrypted until the encrypted message transport piece is deployed.
+The current Rust client base64-encodes message text for the existing encrypted
+message API shape. It is a migration-compatible transport placeholder and must
+not be treated as end-to-end encrypted until the encrypted message transport
+piece is deployed.
 
 ## Release pieces
 
@@ -69,7 +115,7 @@ If creating the service manually, use:
 | Instance type | Free |
 | Health check path | `/health` |
 
-Do not set `PORT` manually. Render provides it automatically, and the container uses it to bind the Spring Boot server.
+Do not set `PORT` manually. Render provides it automatically, and the Rust server uses it to bind the container.
 
 Optional GIF proxy configuration:
 
@@ -83,10 +129,10 @@ The browser never receives the provider key. Without these variables, emoji rema
 ## Optional PostgreSQL persistence
 
 The app uses in-memory storage when no database URL is configured, so local development
-still starts with only `mvn spring-boot:run`. To persist identities, sessions, messages,
+still starts with only `cargo run -p neonmonkey-server`. To persist identities, sessions, messages,
 attachments, groups, group members, and group messages across restarts, set either
-`JDBC_DATABASE_URL` or `DATABASE_URL` before starting the app. `DATABASE_URL` may use
-Render's `postgres://...` format; a `jdbc:postgresql://...` URL is also accepted.
+`DATABASE_URL` before starting the app. `DATABASE_URL` may use Render's
+`postgres://...` format.
 
 The normalized schema is in `db/schema.sql` and is applied automatically when a database
 URL is present. For a Render Blueprint, attach a PostgreSQL database and expose its
@@ -113,7 +159,7 @@ For the standalone binary, use:
 docker-compose up --build
 ```
 
-NeonMonkey is available at http://localhost:8080. PostgreSQL data is stored in the
+NeonMonkey is available at http://localhost:8090. PostgreSQL data is stored in the
 `neonmonkey-postgres` Docker volume and survives container restarts. To stop the
 containers without deleting data:
 
@@ -127,8 +173,8 @@ Set `POSTGRES_DB`, `POSTGRES_USER`, `POSTGRES_PASSWORD`, or `APP_PORT` in a `.en
 file to override the development defaults. Do not use the default password in a
 public deployment.
 
-The app container receives the PostgreSQL username and password in its JDBC
-connection string; no separate `PGPASSWORD` setting is required.
+The app container receives the PostgreSQL username and password in its
+`DATABASE_URL`; no separate `PGPASSWORD` setting is required.
 
 The application still needs an independent cryptographic audit before the custom browser
 protocol should be considered production-grade. Native iOS and Android clients remain

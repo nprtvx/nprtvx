@@ -1,0 +1,23 @@
+[package]
+name = "neonmonkey-server"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+description = "Coexistence Axum server for the NeonMonkey Rust migration"
+
+[dependencies]
+axum = "0.7"
+base64 = "0.22"
+neonmonkey-core = { path = "../core" }
+password-hash = "0.5"
+pbkdf2 = { version = "0.12", features = ["password-hash", "simple"] }
+rand = "0.8"
+serde.workspace = true
+serde_json.workspace = true
+sqlx = { version = "0.8", default-features = false, features = ["postgres", "runtime-tokio-rustls"] }
+tokio = { version = "1.36", features = ["macros", "net", "rt-multi-thread", "sync"] }
+tower-http = { version = "0.6", features = ["fs"] }
+uuid = { version = "1", features = ["v4"] }
+
+[dev-dependencies]
+tower = { version = "0.4", features = ["util"] }

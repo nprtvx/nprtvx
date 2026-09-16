@@ -1,0 +1,35 @@
+[package]
+name = "neonmonkey-web"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+description = "Framework-neutral WASM client boundary for the Rust migration"
+
+[lib]
+crate-type = ["cdylib", "rlib"]
+
+[dependencies]
+serde.workspace = true
+serde_json.workspace = true
+
+[target.'cfg(target_arch = "wasm32")'.dependencies]
+js-sys = "0.3"
+serde-wasm-bindgen = "0.6"
+wasm-bindgen = "0.2"
+wasm-bindgen-futures = "0.4"
+web-sys = { version = "0.3", features = [
+    "Crypto",
+    "Document",
+    "Element",
+    "Event",
+    "Headers",
+    "HtmlElement",
+    "HtmlFormElement",
+    "HtmlInputElement",
+    "Node",
+    "Request",
+    "RequestInit",
+    "RequestMode",
+    "Response",
+    "Window",
+] }

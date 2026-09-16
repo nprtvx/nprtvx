@@ -21,13 +21,11 @@ services:
       postgres:
         condition: service_healthy
     environment:
-      DATABASE_HOST: postgres
-      DATABASE_PORT: "5432"
-      DATABASE_NAME: ${POSTGRES_DB:-neonmonkey}
-      DATABASE_USER: ${POSTGRES_USER:-neonmonkey}
-      DATABASE_PASSWORD: ${POSTGRES_PASSWORD:-neonmonkey_dev_password}
+      DATABASE_URL: postgres://${POSTGRES_USER:-neonmonkey}:${POSTGRES_PASSWORD:-neonmonkey_dev_password}@postgres:5432/${POSTGRES_DB:-neonmonkey}
+      PORT: "10000"
+      STATIC_DIR: /app/static
     ports:
-      - "${APP_PORT:-8080}:8080"
+      - "${APP_PORT:-8090}:10000"
 
 volumes:
   neonmonkey-postgres:

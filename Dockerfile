@@ -1,24 +1,26 @@
-FROM node:22-alpine AS frontend
+FROM rust:1.98-bookworm AS build
 
-WORKDIR /frontend
-COPY frontend/package.json frontend/angular.json frontend/tsconfig.json frontend/tsconfig.app.json ./
-RUN npm install --no-audit --no-fund
-COPY frontend/src ./src
-RUN npm run build
+WORKDIR /src
+COPY Cargo.toml Cargo.lock ./
+COPY crates ./crates
+COPY db ./db
 
-FROM maven:3.9-eclipse-temurin-17 AS build
+RUN rustup target add wasm32-unknown-unknown \
+    && cargo install wasm-bindgen-cli --version 0.2.128 --locked \
+    && cargo build --release -p neonmonkey-server \
+    && crates/web/build.sh /src/static
 
-WORKDIR /app
-COPY pom.xml .
-COPY server ./server
-COPY --from=frontend /frontend/dist/neonmonkey/browser ./server/src/main/resources/static
-RUN mvn -q clean package -DskipTests
-
-FROM eclipse-temurin:17-jre
+FROM debian:bookworm-slim
 
 WORKDIR /app
-COPY --from=build /app/target/neonmonkey-1.0.0.jar app.jar
+RUN apt-get update \
+    && apt-get install --no-install-recommends -y ca-certificates \
+    && rm -rf /var/lib/apt/lists/*
 
-EXPOSE 8080
+COPY --from=build /src/target/release/neonmonkey-server ./neonmonkey-server
+COPY --from=build /src/static ./static
 
-CMD ["sh", "-c", "exec java ${JAVA_OPTS:-} -Dserver.port=${PORT:-8080} -jar app.jar"]
+ENV STATIC_DIR=/app/static
+EXPOSE 10000
+
+CMD ["./neonmonkey-server"]

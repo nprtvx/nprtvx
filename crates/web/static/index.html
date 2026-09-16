@@ -1,0 +1,55 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#080a10">
+  <title>NeonMonkey | Private messaging</title>
+  <link rel="stylesheet" href="/style.css">
+</head>
+<body>
+  <section id="auth-screen" class="auth-screen">
+    <div class="auth-card">
+      <div class="brand auth-brand"><span class="brand-mark">nm</span><span>neonmonkey</span></div>
+      <div id="landing-actions" class="landing-actions">
+        <p class="eyebrow">PRIVATE MESSAGING, REIMAGINED</p>
+        <h1>Speak freely.<br><em>Stay unknown.</em></h1>
+        <p class="auth-subtitle">Private conversations with a simple username and password.</p>
+        <button id="create-account-button" class="auth-submit" type="button">Create account</button>
+        <button id="restore-account-button" class="secondary-button" type="button">Log in</button>
+      </div>
+      <div id="auth-form-panel" hidden>
+        <button id="back-to-landing" class="back-button" type="button">← Back</button>
+        <p class="eyebrow">YOUR PRIVATE ACCOUNT</p>
+        <h1 id="auth-title">Create your account</h1>
+        <form id="auth-form">
+          <label>Username<input id="username-input" autocomplete="username" minlength="3" maxlength="24" required></label>
+          <label>Password<input id="password-input" type="password" autocomplete="current-password" minlength="8" maxlength="128" required></label>
+          <label>Display name<input id="display-name-input" autocomplete="nickname" maxlength="128" required></label>
+          <button id="auth-submit" class="auth-submit" type="submit">Continue</button>
+          <p id="auth-error" class="auth-error" role="alert"></p>
+        </form>
+      </div>
+    </div>
+  </section>
+  <main id="app-shell" class="app-shell" hidden>
+    <aside class="sidebar">
+      <div class="brand"><span class="brand-mark">nm</span><span>neonmonkey</span></div>
+      <nav class="primary-nav"><button id="messages-tab" class="nav-item active" type="button">▦ Messages</button><button id="settings-tab" class="nav-item" type="button">⚙ Settings</button></nav>
+      <div class="channel-heading">Your chats</div><nav id="chat-list" class="channels"></nav>
+      <div class="sidebar-footer"><div class="avatar">◎</div><div><strong id="profile-name"></strong><small id="profile-username"></small></div><button id="logout-button" class="more-button" type="button">Lock</button></div>
+    </aside>
+    <section class="chat-panel">
+      <header class="chat-header"><p class="eyebrow">NEONMONKEY</p><h1 id="page-title">Messages</h1><p id="chat-subtitle" class="subtitle">Private conversations, encrypted on your device.</p></header>
+      <div id="home-empty" class="home-empty"><div class="home-monkey">🐒</div><h2>Your messages</h2><p>Start a private conversation by adding someone’s username or account ID.</p><form id="recipient-form" class="recipient-form"><input id="recipient-input" placeholder="Username or account ID" required><button type="submit">Start chat</button></form><p id="recipient-error" class="recipient-error"></p></div>
+      <div id="messages" class="messages" aria-live="polite"></div>
+      <div class="composer-wrap"><form id="message-form" class="composer"><input id="message-input" placeholder="Select a conversation first" disabled><select id="expiry-select"><option value="0">Keep</option><option value="60">1 min</option><option value="3600">1 hour</option><option value="86400">1 day</option></select><button class="send-button" type="submit">↑</button></form></div>
+    </section>
+    <aside id="settings-panel" class="details-panel" hidden><div class="details-top">Settings</div><div class="channel-illustration">⚙</div><h2 id="settings-name"></h2><div class="detail-section"><p class="section-label">Username</p><code id="settings-username"></code></div><div class="detail-section"><p class="section-label">Account ID</p><code id="settings-account-id"></code></div></aside>
+  </main>
+  <script type="module">
+    import init from "/neonmonkey_web.js";
+    init("/neonmonkey_web_bg.wasm");
+  </script>
+</body>
+</html>
