@@ -204,7 +204,7 @@ struct Identity {
     display_name: String,
     #[serde(rename = "publicKey")]
     public_key: String,
-    #[serde(rename = "recoveryBundle")]
+    #[serde(rename = "recoveryBundle", skip_serializing)]
     recovery_bundle: String,
     #[serde(skip_serializing)]
     password_hash: String,
@@ -1057,6 +1057,20 @@ mod tests {
             validate_registration(&request).unwrap_err().status,
             StatusCode::BAD_REQUEST
         );
+    }
+
+    #[test]
+    fn serialized_identity_does_not_expose_recovery_bundle() {
+        let identity = Identity {
+            account_id: "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa".into(),
+            username: "alice".into(),
+            display_name: "Alice".into(),
+            public_key: "public".into(),
+            recovery_bundle: "secret".into(),
+            password_hash: "hash".into(),
+        };
+        let serialized = serde_json::to_value(identity).unwrap();
+        assert!(serialized.get("recoveryBundle").is_none());
     }
 
     #[test]
