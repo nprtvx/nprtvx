@@ -145,6 +145,9 @@ URL is present. Statements are tracked in the `schema_migrations` table so resta
 not reapply completed schema steps. For a Render Blueprint, attach a PostgreSQL database
 and expose its connection string as `DATABASE_URL`.
 
+The message table includes indexes for recipient history, conversation ordering,
+message-id idempotency, and expiry cleanup.
+
 ### Docker Compose PostgreSQL
 
 Docker Compose must be installed separately from the Docker Engine. Verify it with:

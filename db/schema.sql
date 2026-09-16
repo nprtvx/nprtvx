@@ -36,6 +36,10 @@ CREATE INDEX IF NOT EXISTS encrypted_messages_recipient_idx
     ON encrypted_messages(recipient_account_id, created_at);
 CREATE INDEX IF NOT EXISTS encrypted_messages_expiry_idx
     ON encrypted_messages(expires_at);
+CREATE INDEX IF NOT EXISTS encrypted_messages_conversation_idx
+    ON encrypted_messages(conversation_id, created_at, message_id);
+CREATE INDEX IF NOT EXISTS encrypted_messages_message_sender_idx
+    ON encrypted_messages(message_id, sender_account_id);
 
 CREATE TABLE IF NOT EXISTS groups (
     group_id UUID PRIMARY KEY,
