@@ -580,14 +580,14 @@ async fn persist_identity(state: &AppState, identity: &Identity) -> Result<(), A
     if let Some(pool) = &state.database {
         sqlx::query(
             "INSERT INTO identities (account_id, username, password_hash, display_name, public_key, encrypted_recovery_bundle)
-             VALUES ($1, $2, $3, $4, $5::jsonb, $6::jsonb)",
+             VALUES ($1, $2, $3, $4, $5, $6)",
         )
         .bind(&identity.account_id)
         .bind(&identity.username)
         .bind(&identity.password_hash)
         .bind(&identity.display_name)
-        .bind(&identity.public_key)
-        .bind(&identity.recovery_bundle)
+        .bind(serde_json::Value::String(identity.public_key.clone()))
+        .bind(serde_json::Value::String(identity.recovery_bundle.clone()))
         .execute(pool)
         .await
         .map_err(ApiError::database)?;
