@@ -139,20 +139,38 @@ mod browser {
             .map_err(|_| "Network request failed".to_string())?
             .dyn_into::<Response>()
             .map_err(|_| "Invalid server response".to_string())?;
-        let json = JsFuture::from(
+        let status = response.status();
+        let response_text = JsFuture::from(
             response
-                .json()
-                .map_err(|_| "Invalid JSON response".to_string())?,
+                .text()
+                .map_err(|_| "Could not read server response".to_string())?,
         )
         .await
-        .map_err(|_| "Invalid JSON response".to_string())?;
+        .map_err(|_| format!("Server returned HTTP {status}"))?
+        .as_string()
+        .unwrap_or_default();
+        let json = js_sys::JSON::parse(&response_text).ok();
         if !response.ok() {
-            let message = Reflect::get(&json, &JsValue::from_str("message"))
-                .ok()
+            let message = json
+                .as_ref()
+                .and_then(|value| Reflect::get(value, &JsValue::from_str("message")).ok())
                 .and_then(|value| value.as_string())
-                .unwrap_or_else(|| "The server rejected the request".to_string());
+                .unwrap_or_else(|| {
+                    if response_text.trim().is_empty() {
+                        format!("Server returned HTTP {status}")
+                    } else {
+                        format!("Server returned HTTP {status}: {}", response_text.trim())
+                    }
+                });
             return Err(message);
         }
+        let json = json.ok_or_else(|| {
+            if response_text.trim().is_empty() {
+                format!("Server returned an empty response (HTTP {status})")
+            } else {
+                format!("Server returned invalid JSON (HTTP {status})")
+            }
+        })?;
         serde_wasm_bindgen::from_value(json).map_err(|error| error.to_string())
     }
 

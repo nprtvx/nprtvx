@@ -2,12 +2,13 @@ FROM rust:1.98-bookworm AS build
 
 WORKDIR /src
 COPY Cargo.toml Cargo.lock ./
+
+RUN rustup target add wasm32-unknown-unknown \
+    && cargo install wasm-bindgen-cli --version 0.2.128 --locked
 COPY crates ./crates
 COPY db ./db
 
-RUN rustup target add wasm32-unknown-unknown \
-    && cargo install wasm-bindgen-cli --version 0.2.128 --locked \
-    && cargo build --release -p neonmonkey-server \
+RUN cargo build --release -p neonmonkey-server \
     && crates/web/build.sh /src/static
 
 FROM debian:bookworm-slim
