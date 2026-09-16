@@ -449,7 +449,7 @@ mod browser {
             .parse()
             .ok()
             .filter(|v| *v > 0);
-        input("message-input").set_value("");
+        error("message-error", "");
         spawn_local(async move {
             let result: Result<Message, _> = request(
                 "POST",
@@ -464,8 +464,11 @@ mod browser {
             )
             .await;
             match result {
-                Ok(_) => load_messages(app),
-                Err(message) => error("recipient-error", &message),
+                Ok(_) => {
+                    input("message-input").set_value("");
+                    load_messages(app);
+                }
+                Err(message) => error("message-error", &message),
             }
         });
     }
