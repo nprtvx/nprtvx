@@ -51,30 +51,55 @@ public final class PostgresPersistence {
 
     public void saveIdentity(ChatServer.Identity identity) {
         execute("""
-                INSERT INTO identities (account_id, display_name, public_key, encrypted_recovery_bundle)
-                VALUES (?, ?, ?::jsonb, ?::jsonb)
+                INSERT INTO identities (account_id, username, password_hash, display_name, public_key, encrypted_recovery_bundle)
+                VALUES (?, ?, ?, ?, ?::jsonb, ?::jsonb)
                 ON CONFLICT (account_id) DO UPDATE SET
+                    username = EXCLUDED.username,
+                    password_hash = EXCLUDED.password_hash,
                     public_key = EXCLUDED.public_key,
                     encrypted_recovery_bundle = EXCLUDED.encrypted_recovery_bundle,
                     last_seen_at = CURRENT_TIMESTAMP
-                """, identity.accountId(), identity.displayName(), json(identity.publicKey()), json(identity.recoveryBundle()));
+                """, identity.accountId(), nullableValue(identity.username()), nullableValue(identity.passwordHash()),
+                identity.displayName(), json(identity.publicKey()), json(identity.recoveryBundle()));
     }
 
     public ChatServer.Identity findIdentity(String accountId) {
         if (!enabled) return null;
         try (Connection connection = connection();
              PreparedStatement statement = connection.prepareStatement("""
-                     SELECT trim(account_id), display_name, public_key::text, encrypted_recovery_bundle::text
+                     SELECT trim(account_id), display_name, public_key::text, encrypted_recovery_bundle::text,
+                            COALESCE(username, ''), COALESCE(password_hash, '')
                      FROM identities WHERE trim(account_id) = ?
                      """)) {
             statement.setString(1, accountId);
             try (ResultSet rows = statement.executeQuery()) {
                 if (!rows.next()) return null;
                 return new ChatServer.Identity(rows.getString(1), rows.getString(2),
-                        readJsonString(rows.getString(3)), readJsonString(rows.getString(4)));
+                        readJsonString(rows.getString(3)), readJsonString(rows.getString(4)),
+                        rows.getString(5), rows.getString(6));
             }
         } catch (SQLException exception) {
             throw databaseFailure("Could not load recipient identity", exception);
+        }
+    }
+
+    public ChatServer.Identity findIdentityByUsername(String username) {
+        if (!enabled) return null;
+        try (Connection connection = connection();
+             PreparedStatement statement = connection.prepareStatement("""
+                     SELECT trim(account_id), display_name, public_key::text, encrypted_recovery_bundle::text,
+                            COALESCE(username, ''), COALESCE(password_hash, '')
+                     FROM identities WHERE lower(username) = ?
+                     """)) {
+            statement.setString(1, username);
+            try (ResultSet rows = statement.executeQuery()) {
+                if (!rows.next()) return null;
+                return new ChatServer.Identity(rows.getString(1), rows.getString(2),
+                        readJsonString(rows.getString(3)), readJsonString(rows.getString(4)),
+                        rows.getString(5), rows.getString(6));
+            }
+        } catch (SQLException exception) {
+            throw databaseFailure("Could not load account", exception);
         }
     }
 
@@ -174,13 +199,15 @@ public final class PostgresPersistence {
     private Map<String, ChatServer.Identity> loadIdentities(Connection connection) throws SQLException {
         Map<String, ChatServer.Identity> result = new LinkedHashMap<>();
         try (PreparedStatement statement = connection.prepareStatement("""
-                SELECT trim(account_id), display_name, public_key::text, encrypted_recovery_bundle::text
+                SELECT trim(account_id), display_name, public_key::text, encrypted_recovery_bundle::text,
+                       COALESCE(username, ''), COALESCE(password_hash, '')
                 FROM identities
                 """)) {
             try (ResultSet rows = statement.executeQuery()) {
                 while (rows.next()) {
                     result.put(rows.getString(1), new ChatServer.Identity(rows.getString(1), rows.getString(2),
-                            readJsonString(rows.getString(3)), readJsonString(rows.getString(4))));
+                            readJsonString(rows.getString(3)), readJsonString(rows.getString(4)),
+                            rows.getString(5), rows.getString(6)));
                 }
             }
         }
@@ -301,6 +328,9 @@ public final class PostgresPersistence {
 
     private void ensureIdentityDisplayNameColumn(Connection ignored) throws SQLException {
         execute("ALTER TABLE identities ADD COLUMN IF NOT EXISTS display_name TEXT NOT NULL DEFAULT ''");
+        execute("ALTER TABLE identities ADD COLUMN IF NOT EXISTS username TEXT");
+        execute("ALTER TABLE identities ADD COLUMN IF NOT EXISTS password_hash TEXT");
+        execute("CREATE UNIQUE INDEX IF NOT EXISTS identities_username_idx ON identities (lower(username)) WHERE username IS NOT NULL AND username <> ''");
     }
 
     private void execute(String sql, Object... values) {
@@ -340,6 +370,10 @@ public final class PostgresPersistence {
 
     private static String nullableString(ResultSet rows, int index) throws SQLException {
         return rows.getString(index);
+    }
+
+    private static Object nullableValue(String value) {
+        return value == null || value.isBlank() ? null : value;
     }
 
     private static UUID conversationId(String first, String second) {

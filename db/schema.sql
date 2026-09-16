@@ -1,11 +1,16 @@
 CREATE TABLE IF NOT EXISTS identities (
     account_id CHAR(32) PRIMARY KEY,
+    username TEXT,
+    password_hash TEXT,
     display_name TEXT NOT NULL DEFAULT '',
     public_key JSONB NOT NULL,
     encrypted_recovery_bundle JSONB NOT NULL,
     created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
     last_seen_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
+
+CREATE UNIQUE INDEX IF NOT EXISTS identities_username_idx
+    ON identities (lower(username)) WHERE username IS NOT NULL AND username <> '';
 
 CREATE TABLE IF NOT EXISTS sessions (
     session_id UUID PRIMARY KEY,

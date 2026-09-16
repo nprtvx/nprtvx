@@ -23,6 +23,12 @@ import java.net.URI;
 import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
+import java.nio.charset.StandardCharsets;
+import java.security.MessageDigest;
+import java.security.SecureRandom;
+import java.util.Base64;
+import javax.crypto.SecretKeyFactory;
+import javax.crypto.spec.PBEKeySpec;
 
 @SpringBootApplication(exclude = DataSourceAutoConfiguration.class)
 @EnableScheduling
@@ -38,6 +44,8 @@ public final class ChatServer {
     private final Map<String, Group> groups = new ConcurrentHashMap<>();
     private final List<EncryptedGroupMessage> groupMessages = new CopyOnWriteArrayList<>();
     private final PostgresPersistence persistence;
+    private static final SecureRandom SECURE_RANDOM = new SecureRandom();
+    private static final int PASSWORD_ITERATIONS = 210_000;
 
     @Autowired
     public ChatServer(PostgresPersistence persistence) {
@@ -73,14 +81,52 @@ public final class ChatServer {
     public IdentityResponse register(@RequestBody(required = false) RegisterRequest request,
                                      HttpServletResponse response) {
         validateRegistration(request);
-        Identity identity = new Identity(
-                request.accountId(), request.displayName(), request.publicKey(), request.recoveryBundle());
+        Identity identity = new Identity(request.accountId(), request.displayName(), request.publicKey(),
+                request.recoveryBundle(), "", "");
         if (identities.putIfAbsent(request.accountId(), identity) != null) {
             throw new ResponseStatusException(HttpStatus.CONFLICT, "That identity already exists");
         }
         persistence.saveIdentity(identity);
         createSession(request.accountId(), response);
-        return new IdentityResponse(request.accountId(), request.displayName(), request.publicKey(), request.recoveryBundle());
+        return identityResponse(identity);
+    }
+
+    @PostMapping("/api/auth/register")
+    public IdentityResponse registerWithPassword(@RequestBody(required = false) PasswordRegisterRequest request,
+                                                 HttpServletResponse response) {
+        validatePasswordRegistration(request);
+        String username = normalizeUsername(request.username());
+        if (identities.values().stream().anyMatch(identity -> username.equals(identity.username()))) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT, "That username is already taken");
+        }
+        String accountId = request.accountId().trim().toLowerCase(Locale.ROOT);
+        Identity identity = new Identity(accountId, request.displayName().trim(), request.publicKey(),
+                request.recoveryBundle(), username, hashPassword(request.password()));
+        if (identities.putIfAbsent(accountId, identity) != null) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT, "That identity already exists");
+        }
+        persistence.saveIdentity(identity);
+        createSession(accountId, response);
+        return identityResponse(identity);
+    }
+
+    @PostMapping("/api/auth/login")
+    public IdentityResponse login(@RequestBody(required = false) LoginRequest request,
+                                  HttpServletResponse response) {
+        if (request == null || blank(request.username()) || blank(request.password())) {
+            throw badRequest("Username and password are required");
+        }
+        String username = normalizeUsername(request.username());
+        Identity identity = identities.values().stream()
+                .filter(candidate -> username.equals(candidate.username()))
+                .findFirst()
+                .orElseGet(() -> persistence.findIdentityByUsername(username));
+        if (identity == null || blank(identity.passwordHash()) || !verifyPassword(request.password(), identity.passwordHash())) {
+            throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "Invalid username or password");
+        }
+        identities.put(identity.accountId(), identity);
+        createSession(identity.accountId(), response);
+        return identityResponse(identity);
     }
 
     @PostMapping("/api/identity/restore")
@@ -97,20 +143,20 @@ public final class ChatServer {
                     request.publicKey(), request.recoveryBundle());
             validateRegistration(registration);
             identity = identities.computeIfAbsent(accountId,
-                    ignored -> new Identity(accountId, request.displayName(), request.publicKey(), request.recoveryBundle()));
+                    ignored -> new Identity(accountId, request.displayName(), request.publicKey(), request.recoveryBundle(), "", ""));
             persistence.saveIdentity(identity);
         }
         if (identity == null) {
             throw new ResponseStatusException(HttpStatus.NOT_FOUND, "Identity not found");
         }
         createSession(identity.accountId(), response);
-        return new IdentityResponse(identity.accountId(), identity.displayName(), identity.publicKey(), identity.recoveryBundle());
+        return identityResponse(identity);
     }
 
     @GetMapping("/api/identity/me")
     public IdentityResponse currentIdentity(HttpServletRequest request) {
         Identity identity = requireIdentity(request);
-        return new IdentityResponse(identity.accountId(), identity.displayName(), identity.publicKey(), identity.recoveryBundle());
+        return identityResponse(identity);
     }
 
     @GetMapping("/api/identity/{accountId}")
@@ -382,6 +428,69 @@ public final class ChatServer {
         }
     }
 
+    private void validatePasswordRegistration(PasswordRegisterRequest request) {
+        if (request == null || blank(request.username()) || blank(request.password())
+                || blank(request.displayName()) || blank(request.accountId())
+                || blank(request.publicKey()) || blank(request.recoveryBundle())) {
+            throw badRequest("Username, password, display name, and generated identity data are required");
+        }
+        String username = normalizeUsername(request.username());
+        if (!username.matches("[a-z0-9_]{3,24}")) {
+            throw badRequest("Username must be 3-24 characters using lowercase letters, numbers, or underscores");
+        }
+        if (request.password().length() < 8 || request.password().length() > 128) {
+            throw badRequest("Password must be between 8 and 128 characters");
+        }
+        if (request.displayName().trim().length() > 40) {
+            throw badRequest("Display name cannot exceed 40 characters");
+        }
+        if (!request.accountId().matches("[a-f0-9]{32}")) {
+            throw badRequest("Invalid account ID");
+        }
+        if (request.publicKey().length() > 10000 || request.recoveryBundle().length() > 20000) {
+            throw badRequest("Identity data is too large");
+        }
+    }
+
+    private static String normalizeUsername(String username) {
+        return username.trim().toLowerCase(Locale.ROOT);
+    }
+
+    private static String hashPassword(String password) {
+        byte[] salt = new byte[16];
+        SECURE_RANDOM.nextBytes(salt);
+        byte[] derived = derivePassword(password, salt, PASSWORD_ITERATIONS);
+        return PASSWORD_ITERATIONS + "$" + Base64.getEncoder().encodeToString(salt) + "$"
+                + Base64.getEncoder().encodeToString(derived);
+    }
+
+    private static boolean verifyPassword(String password, String encoded) {
+        try {
+            String[] parts = encoded.split("\\$", -1);
+            if (parts.length != 3) return false;
+            int iterations = Integer.parseInt(parts[0]);
+            byte[] salt = Base64.getDecoder().decode(parts[1]);
+            byte[] expected = Base64.getDecoder().decode(parts[2]);
+            return MessageDigest.isEqual(expected, derivePassword(password, salt, iterations));
+        } catch (RuntimeException exception) {
+            return false;
+        }
+    }
+
+    private static byte[] derivePassword(String password, byte[] salt, int iterations) {
+        try {
+            PBEKeySpec spec = new PBEKeySpec(password.toCharArray(), salt, iterations, 256);
+            return SecretKeyFactory.getInstance("PBKDF2WithHmacSHA256").generateSecret(spec).getEncoded();
+        } catch (Exception exception) {
+            throw new IllegalStateException("Could not hash password", exception);
+        }
+    }
+
+    private static IdentityResponse identityResponse(Identity identity) {
+        return new IdentityResponse(identity.accountId(), identity.username(), identity.displayName(),
+                identity.publicKey(), identity.recoveryBundle());
+    }
+
     private Identity requireIdentity(HttpServletRequest request) {
         String token = cookieValue(request, SESSION_COOKIE);
         String accountId = token == null ? null : sessions.get(token);
@@ -420,12 +529,17 @@ public final class ChatServer {
         return new ResponseStatusException(HttpStatus.BAD_REQUEST, message);
     }
 
-    record Identity(String accountId, String displayName, String publicKey, String recoveryBundle) {}
+    record Identity(String accountId, String displayName, String publicKey, String recoveryBundle,
+                    String username, String passwordHash) {}
     record Group(String groupId, String name, String ownerAccountId, Set<String> members,
                  Map<String, String> memberKeys) {}
     public record RegisterRequest(String accountId, String displayName, String publicKey, String recoveryBundle) {}
+    public record PasswordRegisterRequest(String username, String password, String displayName, String accountId,
+                                          String publicKey, String recoveryBundle) {}
+    public record LoginRequest(String username, String password) {}
     public record RestoreRequest(String accountId, String displayName, String publicKey, String recoveryBundle) {}
-    public record IdentityResponse(String accountId, String displayName, String publicKey, String recoveryBundle) {}
+    public record IdentityResponse(String accountId, String username, String displayName, String publicKey,
+                                   String recoveryBundle) {}
     public record PublicIdentity(String accountId, String displayName, String publicKey) {}
     public record EncryptedMessageRequest(String iv, String ciphertext, Integer expiresInSeconds) {}
     public record EncryptedMessage(String senderAccountId, String recipientAccountId, String iv,

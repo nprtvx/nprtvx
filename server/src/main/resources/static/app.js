@@ -9,10 +9,10 @@ const restoreAccountButton = document.querySelector('#restore-account-button');
 const backToLanding = document.querySelector('#back-to-landing');
 const authError = document.querySelector('#auth-error');
 const authTitle = document.querySelector('#auth-title');
-const recoveryField = document.querySelector('#recovery-field');
-const recoveryInput = document.querySelector('#recovery-input');
 const nameField = document.querySelector('#name-field');
 const displayNameInput = document.querySelector('#display-name-input');
+const usernameInput = document.querySelector('#username-input');
+const passwordInput = document.querySelector('#password-input');
 const messages = document.querySelector('#messages');
 const form = document.querySelector('#message-form');
 const input = document.querySelector('#message-input');
@@ -31,36 +31,21 @@ const messagesTab = document.querySelector('#messages-tab');
 const settingsTab = document.querySelector('#settings-tab');
 const settingsPanel = document.querySelector('#settings-panel');
 const settingsName = document.querySelector('#settings-name');
+const settingsUsername = document.querySelector('#settings-username');
 const settingsAccountId = document.querySelector('#settings-account-id');
 const settingsLock = document.querySelector('#settings-lock');
 const homeEmpty = document.querySelector('#home-empty');
-const recoveryDialog = document.querySelector('#recovery-dialog');
-const recoveryAccountId = document.querySelector('#recovery-account-id');
-const recoveryPhrase = document.querySelector('#recovery-phrase');
-const recoveryCopy = document.querySelector('#recovery-copy');
-const recoveryIdCopy = document.querySelector('#recovery-id-copy');
-const recoveryContinue = document.querySelector('#recovery-continue');
 const pageTitle = document.querySelector('#page-title');
 let restoreMode = false;
 let currentIdentity;
 let pollTimer;
 let generatedIdentity;
 
-function waitForRecoveryConfirmation() {
-  return new Promise((resolve) => {
-    recoveryContinue.addEventListener('click', () => {
-      recoveryDialog.close();
-      resolve();
-    }, { once: true });
-  });
-}
 let currentPrivateKey;
 let currentRecipient;
 let currentRecipientKey;
 let currentGroup;
 let currentGroupKey;
-
-const WORDS = ['amber', 'anchor', 'apple', 'arrow', 'atlas', 'autumn', 'bamboo', 'beacon', 'berry', 'blossom', 'blue', 'breeze', 'canyon', 'cedar', 'circle', 'cloud', 'cobalt', 'comet', 'coral', 'crystal', 'dawn', 'delta', 'ember', 'falcon', 'forest', 'glow', 'harbor', ' Hazel'.trim(), 'island', 'jasmine', 'lantern', 'lemon', 'linen', 'maple', 'meadow', 'meteor', 'mint', 'moon', 'navy', 'ocean', 'olive', 'orbit', 'pebble', 'pine', 'plum', 'prairie', 'rain', 'river', 'rose', 'saffron', 'shadow', 'silver', 'sky', 'snow', 'solar', 'sparrow', 'spring', 'stone', 'sunset', 'tulip', 'velvet', 'violet', 'willow', 'winter'];
 
 function escapeHtml(value) {
   const element = document.createElement('span');
@@ -227,25 +212,19 @@ async function encryptAttachment(file) {
   };
 }
 
-function createRecoveryPhrase(accountId) {
-  const random = crypto.getRandomValues(new Uint8Array(12));
-  return `${accountId} ${[...random].map((byte) => WORDS[byte % WORDS.length]).join(' ')}`;
-}
-
-async function createIdentity(displayName) {
+async function createIdentity(displayName, password) {
   const keyPair = await crypto.subtle.generateKey({ name: 'ECDH', namedCurve: 'P-256' }, true, ['deriveKey', 'deriveBits']);
   const publicKey = await crypto.subtle.exportKey('jwk', keyPair.publicKey);
   const privateKey = await crypto.subtle.exportKey('jwk', keyPair.privateKey);
   const publicKeyJson = JSON.stringify(publicKey);
   const accountId = await sha256Hex(publicKeyJson);
-  const phrase = createRecoveryPhrase(accountId);
   const identity = {
     accountId,
     displayName,
     publicKey: publicKeyJson,
-    recoveryBundle: await encryptBundle({ privateKey, publicKey }, phrase)
+    recoveryBundle: await encryptBundle({ privateKey, publicKey }, password)
   };
-  return { identity, phrase };
+  return { identity, privateKey };
 }
 
 function renderMessage(message) {
@@ -256,25 +235,8 @@ function renderMessage(message) {
   messages.append(row);
 }
 
-let restoringSession;
-
 async function restoreServerSession() {
-  if (restoringSession) return restoringSession;
-  const saved = JSON.parse(localStorage.getItem('neonmonkey_identity') || 'null');
-  if (!saved?.accountId || !saved?.recoveryBundle) return false;
-  restoringSession = fetch('/api/identity/restore', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      accountId: saved.accountId,
-      displayName: saved.displayName,
-      publicKey: saved.publicKey,
-      recoveryBundle: saved.recoveryBundle
-    })
-  }).then((response) => response.ok).finally(() => {
-    restoringSession = undefined;
-  });
-  return restoringSession;
+  return false;
 }
 
 async function api(path, options = {}, retried = false) {
@@ -349,8 +311,9 @@ function showApp(identity, path = '/messages') {
   }
   const shortId = identity.accountId.slice(0, 8);
   profileName.textContent = identity.displayName || `anon-${shortId}`;
-  profileEmail.textContent = identity.accountId;
+  profileEmail.textContent = identity.username ? `@${identity.username}` : identity.accountId;
   settingsName.textContent = identity.displayName;
+  settingsUsername.textContent = identity.username ? `@${identity.username}` : 'Legacy account';
   settingsAccountId.textContent = identity.accountId;
   authScreen.hidden = true;
   appShell.hidden = false;
@@ -409,7 +372,6 @@ function showAuth() {
   landingActions.hidden = false;
   authFormPanel.hidden = true;
   authForm.reset();
-  recoveryInput.value = '';
   renderAuthRoute(window.location.pathname);
 }
 
@@ -429,9 +391,8 @@ function openAuth(mode) {
   authTitle.textContent = restoreMode ? 'Restore your account' : 'Create your account';
   nameField.hidden = restoreMode;
   displayNameInput.required = !restoreMode;
-  recoveryField.hidden = !restoreMode;
-  recoveryInput.required = restoreMode;
-  authSubmit.textContent = restoreMode ? 'Restore account' : 'Create account';
+  passwordInput.autocomplete = restoreMode ? 'current-password' : 'new-password';
+  authSubmit.textContent = restoreMode ? 'Log in' : 'Create account';
   authError.textContent = '';
 }
 
@@ -444,59 +405,44 @@ authForm.addEventListener('submit', async (event) => {
   authSubmit.disabled = true;
   authSubmit.textContent = restoreMode ? 'Logging in…' : 'Creating account…';
   try {
+    const username = usernameInput.value.trim().toLowerCase();
+    const password = passwordInput.value;
+    if (!/^[a-z0-9_]{3,24}$/.test(username)) {
+      throw new Error('Username must be 3-24 characters using letters, numbers, or underscores');
+    }
+    if (password.length < 8) throw new Error('Password must be at least 8 characters');
     if (!restoreMode) {
       const displayName = displayNameInput.value.trim();
       if (!displayName) throw new Error('Enter a display name');
-      generatedIdentity = await createIdentity(displayName);
-      const generatedBundle = await decryptBundle(generatedIdentity.identity.recoveryBundle, generatedIdentity.phrase);
-      currentPrivateKey = await importPrivateKey(generatedBundle.privateKey);
-      await rememberSessionPrivateKey(generatedBundle.privateKey);
-      const registered = await api('/api/identity/register', { method: 'POST', body: JSON.stringify(generatedIdentity.identity) });
+      generatedIdentity = await createIdentity(displayName, password);
+      currentPrivateKey = await importPrivateKey(generatedIdentity.privateKey);
+      await rememberSessionPrivateKey(generatedIdentity.privateKey);
+      const registered = await api('/api/auth/register', {
+        method: 'POST',
+        body: JSON.stringify({ username, password, displayName, ...generatedIdentity.identity })
+      });
       localStorage.setItem('neonmonkey_identity', JSON.stringify({
         accountId: registered.accountId,
+        username: registered.username,
         publicKey: registered.publicKey,
         recoveryBundle: registered.recoveryBundle,
         displayName: registered.displayName
       }));
-      recoveryAccountId.textContent = registered.accountId;
-      recoveryPhrase.textContent = generatedIdentity.phrase;
-      recoveryIdCopy.textContent = 'Copy account ID';
-      recoveryCopy.textContent = 'Copy phrase';
-      recoveryDialog.showModal();
-      await waitForRecoveryConfirmation();
       window.location.assign('/settings');
       return;
     } else {
-      const phrase = recoveryInput.value.trim();
-      const phraseAccountId = phrase.split(/\s+/)[0].toLowerCase();
-      const saved = JSON.parse(localStorage.getItem('neonmonkey_identity') || 'null');
-      const accountId = /^[a-f0-9]{32}$/.test(phraseAccountId) ? phraseAccountId : saved?.accountId;
-      if (!accountId) throw new Error('Your recovery phrase must start with your 32-character account ID.');
-      const response = saved?.accountId === accountId
-        ? await api('/api/identity/restore', {
-            method: 'POST',
-            body: JSON.stringify({
-              accountId,
-              displayName: saved.displayName,
-              publicKey: saved.publicKey,
-              recoveryBundle: saved.recoveryBundle
-            })
-          })
-        : await api('/api/identity/restore', {
-            method: 'POST',
-            body: JSON.stringify({ accountId })
-          });
-      const bundleSource = saved?.accountId === accountId ? saved.recoveryBundle : response.recoveryBundle;
-      const bundle = await decryptBundle(bundleSource, phrase);
+      const response = await api('/api/auth/login', {
+        method: 'POST',
+        body: JSON.stringify({ username, password })
+      });
+      const bundle = await decryptBundle(response.recoveryBundle, password);
       currentPrivateKey = await importPrivateKey(bundle.privateKey);
       await rememberSessionPrivateKey(bundle.privateKey);
-      const publicKey = saved?.publicKey || JSON.stringify(bundle.publicKey);
-      const displayName = saved?.displayName || response.displayName || `anon-${accountId.slice(0, 8)}`;
       localStorage.setItem('neonmonkey_identity', JSON.stringify({
-        ...saved,
-        accountId,
-        displayName,
-        publicKey,
+        accountId: response.accountId,
+        username: response.username,
+        displayName: response.displayName,
+        publicKey: response.publicKey,
         recoveryBundle: response.recoveryBundle
       }));
       window.location.assign('/messages');
@@ -504,7 +450,7 @@ authForm.addEventListener('submit', async (event) => {
     }
   } catch (error) {
     authError.textContent = error.message.includes('OperationError')
-      ? 'That recovery phrase is incorrect.'
+      ? 'That password could not unlock this account.'
       : error.message || 'Login failed. Try again.';
   } finally {
     authSubmit.disabled = false;
@@ -556,16 +502,6 @@ window.addEventListener('popstate', () => {
 settingsLock.addEventListener('click', async () => {
   await api('/api/auth/logout', { method: 'POST' }).catch(() => {});
   showAuth();
-});
-
-recoveryCopy.addEventListener('click', async () => {
-  await navigator.clipboard.writeText(recoveryPhrase.textContent);
-  recoveryCopy.textContent = 'Copied';
-});
-
-recoveryIdCopy.addEventListener('click', async () => {
-  await navigator.clipboard.writeText(recoveryAccountId.textContent);
-  recoveryIdCopy.textContent = 'Copied';
 });
 
 logoutButton.addEventListener('click', async () => {

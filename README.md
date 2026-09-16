@@ -12,21 +12,21 @@ mvn spring-boot:run
 
 Open http://localhost:8080.
 
-## Current piece: anonymous identities
+## Current piece: username and password accounts
 
-The first piece removes email and phone signup:
+The account flow uses a username and password without email or phone signup:
 
 - The browser generates an ECDH identity key pair.
 - The server receives the public key and an account ID derived from it.
-- The private key is encrypted in the browser with a recovery phrase before upload.
-- The server stores only the public identity and encrypted recovery bundle.
-- The recovery phrase is shown once and cannot be recovered by NeonMonkey.
+- The private key is encrypted in the browser with the account password before upload.
+- The server stores a salted PBKDF2 password hash and the encrypted recovery bundle.
+- The password is never stored or returned by the server.
 
 The message transport is still the legacy plaintext placeholder at this stage. It must not be treated as end-to-end encrypted until the encrypted message transport piece is deployed.
 
 ## Release pieces
 
-1. Anonymous identity and recovery phrase (current)
+1. Username and password identity accounts (current)
 2. Encrypted one-to-one messaging
 3. Encrypted group conversations
 4. Disappearing messages
@@ -42,9 +42,9 @@ This repository includes a `Dockerfile` and `render.yaml` for Render.
 ## Product flow
 
 1. Open `neonmonkey.in`.
-2. Choose **Create account**, enter a display name, and NeonMonkey generates the identity automatically.
-3. Save the generated account ID and recovery phrase.
-4. Choose **Restore account** later and enter the recovery phrase. New recovery phrases begin with the account ID so the encrypted bundle can be located on another device.
+2. Choose **Create account**, enter a username, password, and display name, and NeonMonkey generates the identity automatically.
+3. Choose **Log in** later with the same username and password. The password unlocks the encrypted browser-side key bundle.
+4. Share the generated account ID with contacts who want to start a conversation.
 5. The Home screen contains only **Messages** and **Settings**. New accounts show an empty chat list until a conversation is started.
 
 ### Blueprint deployment

@@ -15,35 +15,25 @@
       <div id="landing-actions" class="landing-actions">
         <p class="eyebrow">PRIVATE MESSAGING, REIMAGINED</p>
         <h1>Speak freely.<br><em>Stay unknown.</em></h1>
-        <p class="auth-subtitle">End-to-end encrypted conversations with no email, no phone number, and no tracking.</p>
+        <p class="auth-subtitle">Private conversations with a simple username and password. Your encryption keys stay in your browser.</p>
         <button id="create-account-button" class="auth-submit" type="button">Create account <span>→</span></button>
-        <button id="restore-account-button" class="secondary-button" type="button">Restore account</button>
+        <button id="restore-account-button" class="secondary-button" type="button">Log in</button>
       </div>
       <div id="auth-form-panel" hidden>
       <button id="back-to-landing" class="back-button" type="button">← Back</button>
-      <p class="eyebrow">YOUR PRIVATE IDENTITY</p>
+      <p class="eyebrow">YOUR PRIVATE ACCOUNT</p>
       <h1 id="auth-title">Create your account</h1>
-      <p class="auth-subtitle">Choose a display name. NeonMonkey will generate your unique ID and encryption keys in this browser.</p>
+      <p id="auth-copy" class="auth-subtitle">Choose a username and password. NeonMonkey will generate your encryption keys in this browser.</p>
       <form id="auth-form">
-        <label id="name-field">Your display name<input id="display-name-input" name="name" autocomplete="off" placeholder="e.g. Luna" maxlength="40" required></label>
-        <label id="recovery-field" hidden>Recovery phrase<textarea id="recovery-input" name="recovery" autocomplete="off" placeholder="Enter your saved recovery phrase"></textarea></label>
+        <label>Username<input id="username-input" name="username" autocomplete="username" placeholder="e.g. luna_7" maxlength="24" pattern="[A-Za-z0-9_]{3,24}" required></label>
+        <label>Password<input id="password-input" name="password" type="password" autocomplete="new-password" placeholder="At least 8 characters" minlength="8" maxlength="128" required></label>
+        <label id="name-field">Display name<input id="display-name-input" name="name" autocomplete="nickname" placeholder="e.g. Luna" maxlength="40" required></label>
         <button id="auth-submit" class="auth-submit" type="submit">Create account</button>
         <p id="auth-error" class="auth-error" role="alert"></p>
       </form>
       </div>
     </div>
   </section>
-  <dialog id="recovery-dialog" class="recovery-dialog">
-    <h2>Save your recovery phrase</h2>
-    <p>This is the only way to restore your identity. Anyone with it can access your account.</p>
-    <label class="recovery-label">Your account ID</label>
-    <code id="recovery-account-id"></code>
-    <button id="recovery-id-copy" class="auth-submit" type="button">Copy account ID</button>
-    <label class="recovery-label">Your recovery phrase</label>
-    <code id="recovery-phrase"></code>
-    <button id="recovery-copy" class="auth-submit" type="button">Copy phrase</button>
-    <button id="recovery-continue" class="dialog-close" type="button">Open my profile</button>
-  </dialog>
   <main id="app-shell" class="app-shell" hidden>
     <aside class="sidebar">
       <div class="brand"><span class="brand-mark">nm</span><span>neonmonkey</span></div>
@@ -63,7 +53,7 @@
       <div id="messages" class="messages" aria-live="polite"></div>
       <div class="composer-wrap"><div class="typing-indicator">Messages are encrypted on this device before sending.</div><div id="emoji-bar" class="emoji-bar"><button type="button">😀</button><button type="button">😂</button><button type="button">❤️</button><button type="button">🎉</button><button type="button">🔥</button><button type="button">👍</button></div><form id="message-form" class="composer"><button id="attach-button" type="button" class="compose-icon" aria-label="Add attachment">+</button><input id="attachment-input" type="file" hidden><input id="message-input" autocomplete="off" placeholder="Select a conversation first" aria-label="Message" disabled><select id="expiry-select" aria-label="Disappearing message duration"><option value="0">Keep</option><option value="60">1 min</option><option value="3600">1 hour</option><option value="86400">1 day</option></select><button class="send-button" type="submit" aria-label="Send message">↑</button></form><p class="composer-hint"><kbd>Enter</kbd> to send <span>·</span> <kbd>Shift + Enter</kbd> for a new line</p></div>
     </section>
-    <aside id="settings-panel" class="details-panel" hidden><div class="details-top"><span>Settings</span></div><div class="channel-illustration">⚙</div><h2 id="settings-name">Anonymous</h2><p class="details-copy">Your account is anonymous. Keep your recovery phrase safe because NeonMonkey cannot reset it.</p><div class="detail-section"><p class="section-label">Account ID</p><code id="settings-account-id" class="settings-id"></code></div><button id="settings-lock" class="auth-submit" type="button">Lock account</button></aside>
+    <aside id="settings-panel" class="details-panel" hidden><div class="details-top"><span>Settings</span></div><div class="channel-illustration">⚙</div><h2 id="settings-name">Anonymous</h2><p class="details-copy">Your account uses a username and password. Your message encryption keys remain protected in this browser.</p><div class="detail-section"><p class="section-label">Username</p><code id="settings-username" class="settings-id"></code></div><div class="detail-section"><p class="section-label">Account ID</p><code id="settings-account-id" class="settings-id"></code></div><button id="settings-lock" class="auth-submit" type="button">Log out</button></aside>
   </main>
   <script src="/app.js"></script>
   <script>
