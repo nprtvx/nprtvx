@@ -150,6 +150,8 @@ and expose its connection string as `DATABASE_URL`.
 
 The message table includes indexes for recipient history, conversation ordering,
 message-id idempotency, and expiry cleanup.
+Identity uniqueness is enforced by PostgreSQL for both normalized account IDs
+and usernames, including concurrent registration attempts.
 
 ### Docker Compose PostgreSQL
 

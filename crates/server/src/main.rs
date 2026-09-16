@@ -505,11 +505,13 @@ async fn get_identity(
     Path(account_id): Path<String>,
 ) -> Result<Json<serde_json::Value>, ApiError> {
     authenticated_identity(&state, &headers).await?;
+    let account_id = account_id.trim().to_lowercase();
+    validate_account_id(&account_id)?;
     let identity = state
         .identities
         .read()
         .await
-        .get(&account_id.trim().to_lowercase())
+        .get(&account_id)
         .cloned()
         .ok_or_else(|| ApiError::new(StatusCode::NOT_FOUND, "Recipient identity not found"))?;
     Ok(Json(public_identity(&identity)))
@@ -940,7 +942,7 @@ fn verify_password(password: &str, stored: &str) -> bool {
 
 async fn persist_identity(state: &AppState, identity: &Identity) -> Result<(), ApiError> {
     if let Some(pool) = &state.database {
-        sqlx::query(
+        let result = sqlx::query(
             "INSERT INTO identities (account_id, username, password_hash, display_name, public_key, encrypted_recovery_bundle)
              VALUES ($1, $2, $3, $4, $5, $6)",
         )
@@ -951,8 +953,21 @@ async fn persist_identity(state: &AppState, identity: &Identity) -> Result<(), A
         .bind(serde_json::Value::String(identity.public_key.clone()))
         .bind(serde_json::Value::String(identity.recovery_bundle.clone()))
         .execute(pool)
-        .await
-        .map_err(ApiError::database)?;
+        .await;
+        if let Err(error) = result {
+            if error
+                .as_database_error()
+                .and_then(|database_error| database_error.code())
+                .as_deref()
+                == Some("23505")
+            {
+                return Err(ApiError::new(
+                    StatusCode::CONFLICT,
+                    "That identity or username already exists",
+                ));
+            }
+            return Err(ApiError::database(error));
+        }
     }
     Ok(())
 }
@@ -1260,6 +1275,12 @@ mod tests {
         assert!(validate_account_id("a".repeat(32).as_str()).is_ok());
         assert!(validate_account_id("a".repeat(31).as_str()).is_err());
         assert!(validate_account_id(&"g".repeat(32)).is_err());
+    }
+
+    #[test]
+    fn identity_path_ids_use_the_same_validation() {
+        assert!(validate_account_id("short").is_err());
+        assert!(validate_account_id("a".repeat(32).as_str()).is_ok());
     }
 
     #[test]

@@ -11,6 +11,8 @@ CREATE TABLE IF NOT EXISTS identities (
 
 CREATE UNIQUE INDEX IF NOT EXISTS identities_username_idx
     ON identities (lower(username)) WHERE username IS NOT NULL AND username <> '';
+CREATE UNIQUE INDEX IF NOT EXISTS identities_account_id_normalized_idx
+    ON identities (lower(trim(account_id)));
 
 CREATE TABLE IF NOT EXISTS sessions (
     session_id UUID PRIMARY KEY,
