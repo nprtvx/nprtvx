@@ -465,12 +465,8 @@ async fn current_identity(
     headers: HeaderMap,
 ) -> Result<Json<Identity>, ApiError> {
     let account_id = authenticated_identity(&state, &headers).await?;
-    let identity = state
-        .identities
-        .read()
-        .await
-        .get(&account_id)
-        .cloned()
+    let identity = load_identity(&state, Some(&account_id), None)
+        .await?
         .ok_or_else(|| ApiError::new(StatusCode::UNAUTHORIZED, "Invalid session"))?;
     Ok(Json(identity))
 }
@@ -507,12 +503,8 @@ async fn get_identity(
     authenticated_identity(&state, &headers).await?;
     let account_id = account_id.trim().to_lowercase();
     validate_account_id(&account_id)?;
-    let identity = state
-        .identities
-        .read()
-        .await
-        .get(&account_id)
-        .cloned()
+    let identity = load_identity(&state, Some(&account_id), None)
+        .await?
         .ok_or_else(|| ApiError::new(StatusCode::NOT_FOUND, "Recipient identity not found"))?;
     Ok(Json(public_identity(&identity)))
 }
@@ -527,13 +519,8 @@ async fn lookup_identity(
     if value.is_empty() || value.len() > 128 {
         return Err(ApiError::bad_request("Identity lookup is invalid"));
     }
-    let identity = state
-        .identities
-        .read()
-        .await
-        .values()
-        .find(|item| item.account_id == value || item.username == value)
-        .cloned()
+    let identity = load_identity(&state, Some(&value), Some(&value))
+        .await?
         .filter(|item| item.account_id != current)
         .ok_or_else(|| {
             ApiError::new(
@@ -964,6 +951,53 @@ fn public_identity(identity: &Identity) -> serde_json::Value {
         "displayName": identity.display_name,
         "publicKey": identity.public_key
     })
+}
+
+async fn load_identity(
+    state: &AppState,
+    account_id: Option<&str>,
+    username: Option<&str>,
+) -> Result<Option<Identity>, ApiError> {
+    if let Some(pool) = &state.database {
+        let row = sqlx::query(
+            "SELECT trim(account_id) account_id, coalesce(username, '') username,
+                    display_name, public_key::text public_key,
+                    encrypted_recovery_bundle::text recovery_bundle,
+                    coalesce(password_hash, '') password_hash
+             FROM identities
+             WHERE ($1::text IS NOT NULL AND trim(account_id) = $1)
+                OR ($2::text IS NOT NULL AND lower(username) = $2)
+             LIMIT 1",
+        )
+        .bind(account_id)
+        .bind(username)
+        .fetch_optional(pool)
+        .await
+        .map_err(ApiError::database)?;
+        return row
+            .map(|row| {
+                Ok(Identity {
+                    account_id: row.try_get("account_id")?,
+                    username: row.try_get("username")?,
+                    display_name: row.try_get("display_name")?,
+                    public_key: json_text(row.try_get("public_key")?),
+                    recovery_bundle: json_text(row.try_get("recovery_bundle")?),
+                    password_hash: row.try_get("password_hash")?,
+                })
+            })
+            .transpose()
+            .map_err(ApiError::database);
+    }
+    Ok(state
+        .identities
+        .read()
+        .await
+        .values()
+        .find(|item| {
+            account_id.is_some_and(|value| item.account_id == value)
+                || username.is_some_and(|value| item.username == value)
+        })
+        .cloned())
 }
 
 fn validate_registration(request: &RegisterRequest) -> Result<(), ApiError> {
