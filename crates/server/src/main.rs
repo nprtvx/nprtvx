@@ -256,7 +256,7 @@ struct FailureWindow {
     locked_until: i64,
 }
 
-#[derive(Clone, Debug, Serialize)]
+#[derive(Clone, Debug, Deserialize, Serialize)]
 struct Message {
     #[serde(rename = "messageId")]
     message_id: String,
@@ -1261,7 +1261,10 @@ impl IntoResponse for ApiError {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use axum::{body::Body, http::Request};
+    use axum::{
+        body::{to_bytes, Body},
+        http::Request,
+    };
     use tower::ServiceExt;
 
     #[tokio::test]
@@ -1538,6 +1541,112 @@ mod tests {
             .await
             .unwrap();
         assert_eq!(body.status(), StatusCode::NOT_FOUND);
+    }
+
+    #[tokio::test]
+    async fn two_users_can_send_and_read_a_message() {
+        let state = AppState::new(AppConfig {
+            bind_addr: "127.0.0.1:8090".parse().unwrap(),
+            database_url: None,
+            redis_url: None,
+            static_dir: PathBuf::from("static"),
+        })
+        .await
+        .unwrap();
+        let app = router(state);
+        let register_app = app.clone();
+        let register = move |account_id: &'static str, username: &'static str| {
+            let app = register_app.clone();
+            async move {
+                app.oneshot(
+                    Request::post("/api/auth/register")
+                        .header(header::HOST, "localhost")
+                        .header(header::ORIGIN, "http://localhost")
+                        .header("content-type", "application/json")
+                        .body(Body::from(
+                            serde_json::json!({
+                                "accountId": account_id,
+                                "username": username,
+                                "password": "correct horse battery staple",
+                                "displayName": username,
+                                "publicKey": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=",
+                                "recoveryBundle": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA="
+                            })
+                            .to_string(),
+                        ))
+                        .unwrap(),
+                )
+                .await
+                .unwrap()
+            }
+        };
+        let alice_response = register("aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa", "alice").await;
+        let alice_cookie = alice_response
+            .headers()
+            .get(header::SET_COOKIE)
+            .unwrap()
+            .to_str()
+            .unwrap()
+            .split(';')
+            .next()
+            .unwrap()
+            .to_string();
+        let bob_response = register("bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb", "bob").await;
+        let bob_cookie = bob_response
+            .headers()
+            .get(header::SET_COOKIE)
+            .unwrap()
+            .to_str()
+            .unwrap()
+            .split(';')
+            .next()
+            .unwrap()
+            .to_string();
+
+        let sent = app
+            .clone()
+            .oneshot(
+                Request::post("/api/direct/bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb")
+                    .header(header::HOST, "localhost")
+                    .header(header::ORIGIN, "http://localhost")
+                    .header(header::COOKIE, &alice_cookie)
+                    .header("content-type", "application/json")
+                    .body(Body::from(
+                        serde_json::json!({
+                            "messageId": "22222222-2222-2222-2222-222222222222",
+                            "iv": "AAAAAAAAAAAAAAAA",
+                            "ciphertext": "AAAAAAAAAAAAAAAAAAAAAA=="
+                        })
+                        .to_string(),
+                    ))
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(sent.status(), StatusCode::OK);
+
+        let received = app
+            .oneshot(
+                Request::get("/api/direct/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa?limit=100")
+                    .header(header::HOST, "localhost")
+                    .header(header::COOKIE, bob_cookie)
+                    .body(Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(received.status(), StatusCode::OK);
+        let body = to_bytes(received.into_body(), 1_000_000).await.unwrap();
+        let messages: Vec<Message> = serde_json::from_slice(&body).unwrap();
+        assert_eq!(messages.len(), 1);
+        assert_eq!(
+            messages[0].message_id,
+            "22222222-2222-2222-2222-222222222222"
+        );
+        assert_eq!(
+            messages[0].sender_account_id,
+            "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+        );
     }
 
     #[test]
