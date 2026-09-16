@@ -478,6 +478,34 @@ mod tests {
     }
 
     #[test]
+    fn protocol_v1_structural_vectors_match_contract() {
+        let sender = IdentityId::new("alice").unwrap();
+        let recipient = IdentityId::new("bob").unwrap();
+        assert_eq!(PROTOCOL_VERSION, 1);
+        assert_eq!(
+            message_associated_data("message-1", &sender, &recipient, 123),
+            b"neonmonkey:v1:direct:message-1:alice:bob:123"
+        );
+        let envelope = MessageEnvelope {
+            message_id: "message-1".into(),
+            sender,
+            recipient,
+            created_at_ms: 123,
+            protocol_version: PROTOCOL_VERSION,
+            nonce: vec![0; NONCE_LENGTH],
+            ciphertext: vec![0; 16],
+            associated_data: b"neonmonkey:v1:direct:message-1:alice:bob:123".to_vec(),
+        };
+        assert!(envelope.validate_canonical_associated_data().is_ok());
+        let mut empty_aad = envelope;
+        empty_aad.associated_data.clear();
+        assert!(matches!(
+            empty_aad.validate(),
+            Err(ModelError::InvalidCiphertext)
+        ));
+    }
+
+    #[test]
     fn low_order_public_keys_are_rejected() {
         let alice = IdentityKeypair::generate();
         assert!(matches!(

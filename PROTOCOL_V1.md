@@ -104,9 +104,26 @@ cryptographic review.
 
 ## Interoperability gate
 
-Before a client claims interoperability, the repository must contain vectors
-covering identity encoding, key agreement, associated-data construction,
-encryption/decryption, tampering, unknown versions, expiry, duplicate IDs,
-replay handling, and recovery. The current unit tests cover only the shared
-crypto seam and envelope validation; they do not satisfy the production
-interoperability or audit gate.
+The following version-1 structural vectors are normative:
+
+| Case | Input | Expected result |
+|---|---|---|
+| Protocol | `protocolVersion = 1` | Accepted |
+| Downgrade | `protocolVersion = 0` | Rejected as unsupported |
+| Sender | `alice` | Valid identity ID |
+| Recipient | `bob` | Valid identity ID |
+| Message ID | `message-1` | Valid non-empty message ID |
+| Created time | `123` | Used verbatim in associated data |
+| Associated data | `neonmonkey:v1:direct:message-1:alice:bob:123` | Exact UTF-8 bytes |
+| Nonce | 12 decoded bytes | Accepted |
+| Ciphertext | 16 decoded bytes or more | Accepted |
+| Empty associated data | Empty byte string | Rejected |
+| Timestamp mutation | Change `123` to `124` without re-encrypting | Rejected by canonical validation |
+
+The shared-core tests in `crates/core/src/lib.rs` execute these vectors for
+version checks, associated-data construction, low-order key rejection,
+authenticated round trips, tampering, and timestamp mutation. They are
+structural vectors, not a claim that the current browser transport conforms:
+the browser still submits base64-encoded plaintext placeholders. Future
+clients must add fixed key-agreement and ciphertext vectors before claiming
+cross-platform cryptographic interoperability.
