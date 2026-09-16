@@ -431,10 +431,30 @@ authForm.addEventListener('submit', async (event) => {
       window.location.assign('/settings');
       return;
     } else {
-      const response = await api('/api/auth/login', {
-        method: 'POST',
-        body: JSON.stringify({ username, password })
-      });
+      let response;
+      try {
+        response = await api('/api/auth/login', {
+          method: 'POST',
+          body: JSON.stringify({ username, password })
+        });
+      } catch (loginError) {
+        const saved = JSON.parse(localStorage.getItem('neonmonkey_identity') || 'null');
+        if (loginError.message !== 'Account not found'
+            || saved?.username !== username || !saved?.accountId || !saved?.recoveryBundle) {
+          throw loginError;
+        }
+        response = await api('/api/identity/restore', {
+          method: 'POST',
+          body: JSON.stringify({
+            accountId: saved.accountId,
+            username,
+            password,
+            displayName: saved.displayName,
+            publicKey: saved.publicKey,
+            recoveryBundle: saved.recoveryBundle
+          })
+        });
+      }
       const bundle = await decryptBundle(response.recoveryBundle, password);
       currentPrivateKey = await importPrivateKey(bundle.privateKey);
       await rememberSessionPrivateKey(bundle.privateKey);

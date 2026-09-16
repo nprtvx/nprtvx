@@ -121,7 +121,10 @@ public final class ChatServer {
                 .filter(candidate -> username.equals(candidate.username()))
                 .findFirst()
                 .orElseGet(() -> persistence.findIdentityByUsername(username));
-        if (identity == null || blank(identity.passwordHash()) || !verifyPassword(request.password(), identity.passwordHash())) {
+        if (identity == null) {
+            throw new ResponseStatusException(HttpStatus.NOT_FOUND, "Account not found");
+        }
+        if (blank(identity.passwordHash()) || !verifyPassword(request.password(), identity.passwordHash())) {
             throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "Invalid username or password");
         }
         identities.put(identity.accountId(), identity);
@@ -142,8 +145,23 @@ public final class ChatServer {
             RegisterRequest registration = new RegisterRequest(accountId, request.displayName(),
                     request.publicKey(), request.recoveryBundle());
             validateRegistration(registration);
+            String username = normalizeUsername(request.username());
+            String passwordHash = "";
+            if (!blank(request.username()) || !blank(request.password())) {
+                if (blank(request.username()) || blank(request.password())) {
+                    throw badRequest("Username and password are required");
+                }
+                if (!username.matches("[a-z0-9_]{3,24}") || request.password().length() < 8
+                        || request.password().length() > 128) {
+                    throw badRequest("Invalid username or password");
+                }
+                passwordHash = hashPassword(request.password());
+            }
+            String restoredUsername = username;
+            String restoredPasswordHash = passwordHash;
             identity = identities.computeIfAbsent(accountId,
-                    ignored -> new Identity(accountId, request.displayName(), request.publicKey(), request.recoveryBundle(), "", ""));
+                    ignored -> new Identity(accountId, request.displayName(), request.publicKey(),
+                            request.recoveryBundle(), restoredUsername, restoredPasswordHash));
             persistence.saveIdentity(identity);
         }
         if (identity == null) {
@@ -537,7 +555,8 @@ public final class ChatServer {
     public record PasswordRegisterRequest(String username, String password, String displayName, String accountId,
                                           String publicKey, String recoveryBundle) {}
     public record LoginRequest(String username, String password) {}
-    public record RestoreRequest(String accountId, String displayName, String publicKey, String recoveryBundle) {}
+    public record RestoreRequest(String accountId, String displayName, String publicKey, String recoveryBundle,
+                                 String username, String password) {}
     public record IdentityResponse(String accountId, String username, String displayName, String publicKey,
                                    String recoveryBundle) {}
     public record PublicIdentity(String accountId, String displayName, String publicKey) {}
