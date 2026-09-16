@@ -678,7 +678,10 @@ async fn post_message(
     }
     let recipient = recipient.to_lowercase();
     validate_account_id(&recipient)?;
-    if !state.identities.read().await.contains_key(&recipient) {
+    if load_identity(&state, Some(&recipient), None)
+        .await?
+        .is_none()
+    {
         return Err(ApiError::new(
             StatusCode::NOT_FOUND,
             "Recipient identity not found",
