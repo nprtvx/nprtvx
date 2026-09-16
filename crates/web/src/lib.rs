@@ -175,7 +175,9 @@ mod browser {
     }
 
     fn json<T: Serialize>(value: &T) -> JsValue {
-        serde_wasm_bindgen::to_value(value).unwrap()
+        JsValue::from_str(
+            &serde_json::to_string(value).expect("request payload must be serializable"),
+        )
     }
 
     fn set_busy(app: &Rc<RefCell<App>>, busy: bool) {
