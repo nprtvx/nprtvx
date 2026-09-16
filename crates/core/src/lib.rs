@@ -40,8 +40,16 @@ impl IdentityId {
         if self.0.is_empty() || self.0.len() > 128 {
             return Err(ModelError::InvalidIdentityId);
         }
+
         Ok(())
     }
+}
+
+pub fn validate_protocol_version(version: u16) -> Result<(), ModelError> {
+    if version != PROTOCOL_VERSION {
+        return Err(ModelError::UnsupportedProtocolVersion(version));
+    }
+    Ok(())
 }
 
 #[derive(Clone, Debug, Deserialize, Serialize)]
@@ -128,13 +136,16 @@ impl MessageEnvelope {
         if self.message_id.is_empty() || self.message_id.len() > 256 {
             return Err(ModelError::InvalidMessageId);
         }
-        if self.protocol_version != PROTOCOL_VERSION
-            || self.nonce.len() != NONCE_LENGTH
-            || self.ciphertext.len() < 16
-        {
+
+        validate_protocol_version(self.protocol_version)?;
+        if self.nonce.len() != NONCE_LENGTH || self.ciphertext.len() < 16 {
             return Err(ModelError::InvalidCiphertext);
         }
         Ok(())
+    }
+
+    pub fn protocol_version(&self) -> u16 {
+        self.protocol_version
     }
 
     fn encrypted_payload(&self) -> EncryptedPayload {
@@ -163,6 +174,8 @@ pub enum ModelError {
     InvalidMessageId,
     #[error("message has an invalid nonce, protocol version, or ciphertext")]
     InvalidCiphertext,
+    #[error("unsupported protocol version: {0}")]
+    UnsupportedProtocolVersion(u16),
 }
 
 #[derive(Debug, Error)]
@@ -327,5 +340,25 @@ mod tests {
         let mut payload = encrypt(&key, b"hello", b"aad").unwrap();
         payload.ciphertext[0] ^= 1;
         assert!(decrypt(&key, &payload, b"aad").is_err());
+    }
+
+    #[test]
+    fn unknown_protocol_versions_are_rejected() {
+        let alice = IdentityKeypair::generate();
+        let bob = IdentityKeypair::generate();
+        let payload = encrypt_for(&alice, &bob.public_key(), b"hello", b"aad").unwrap();
+        let mut envelope = MessageEnvelope::new(
+            new_message_id(),
+            IdentityId::new("alice").unwrap(),
+            IdentityId::new("bob").unwrap(),
+            payload,
+            b"aad".to_vec(),
+        )
+        .unwrap();
+        envelope.protocol_version = PROTOCOL_VERSION + 1;
+        assert!(matches!(
+            envelope.validate(),
+            Err(ModelError::UnsupportedProtocolVersion(_))
+        ));
     }
 }
