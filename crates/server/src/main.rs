@@ -536,6 +536,41 @@ async fn list_conversations(
     headers: HeaderMap,
 ) -> Result<Json<Vec<serde_json::Value>>, ApiError> {
     let current = authenticated_identity(&state, &headers).await?;
+    if let Some(pool) = &state.database {
+        let rows = sqlx::query(
+            "SELECT i.account_id, coalesce(i.username, '') username,
+                    i.display_name, i.public_key::text public_key
+             FROM identities i
+             JOIN (
+                 SELECT DISTINCT CASE
+                     WHEN trim(sender_account_id) = $1 THEN trim(recipient_account_id)
+                     ELSE trim(sender_account_id)
+                 END account_id
+                 FROM encrypted_messages
+                 WHERE (trim(sender_account_id) = $1 OR trim(recipient_account_id) = $1)
+                   AND (expires_at IS NULL OR expires_at > CURRENT_TIMESTAMP)
+             ) participants ON trim(i.account_id) = participants.account_id
+             WHERE trim(i.account_id) <> $1
+             ORDER BY i.username, i.account_id",
+        )
+        .bind(&current)
+        .fetch_all(pool)
+        .await
+        .map_err(ApiError::database)?;
+        let conversations = rows
+            .into_iter()
+            .map(|row| {
+                Ok(serde_json::json!({
+                    "accountId": row.try_get::<String, _>("account_id")?,
+                    "username": row.try_get::<String, _>("username")?,
+                    "displayName": row.try_get::<String, _>("display_name")?,
+                    "publicKey": json_text(row.try_get::<String, _>("public_key")?)
+                }))
+            })
+            .collect::<Result<Vec<_>, sqlx::Error>>()
+            .map_err(ApiError::database)?;
+        return Ok(Json(conversations));
+    }
     let messages = state.messages.read().await;
     let mut ids = Vec::new();
     for message in messages.iter().filter(|item| active(item.expires_at)) {
