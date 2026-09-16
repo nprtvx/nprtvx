@@ -84,6 +84,9 @@ message API shape. This is a migration-compatible transport placeholder and
 must not be treated as end-to-end encrypted. Production release remains blocked
 on a versioned, independently reviewed client cryptographic protocol.
 
+The current version-1 migration contract and its threat model are documented in
+[`PROTOCOL_V1.md`](PROTOCOL_V1.md) and [`THREAT_MODEL.md`](THREAT_MODEL.md).
+
 ## Release pieces and status
 
 1. Username and password identity accounts (implemented)
