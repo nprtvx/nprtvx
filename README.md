@@ -12,6 +12,10 @@ mvn spring-boot:run
 
 Open http://localhost:8080.
 
+The browser interface is a standalone Angular application. The Docker build compiles
+`frontend/` with Angular and copies the production bundle into Spring Boot's static
+resources; Spring Boot continues to provide the API and PostgreSQL persistence.
+
 ## Current piece: username and password accounts
 
 The account flow uses a username and password without email or phone signup:
