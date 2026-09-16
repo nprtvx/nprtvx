@@ -21,6 +21,20 @@ pub const PROTOCOL_VERSION: u16 = 1;
 pub const NONCE_LENGTH: usize = 12;
 pub const KEY_LENGTH: usize = 32;
 
+pub fn message_associated_data(
+    message_id: &str,
+    sender: &IdentityId,
+    recipient: &IdentityId,
+    created_at_ms: u64,
+) -> Vec<u8> {
+    format!(
+        "neonmonkey:v{PROTOCOL_VERSION}:direct:{message_id}:{}:{}:{created_at_ms}",
+        sender.as_str(),
+        recipient.as_str()
+    )
+    .into_bytes()
+}
+
 #[derive(Clone, Debug, Deserialize, Eq, Hash, PartialEq, Serialize)]
 #[serde(transparent)]
 pub struct IdentityId(String);
@@ -102,12 +116,23 @@ pub struct MessageEnvelope {
 }
 
 impl MessageEnvelope {
+    pub fn associated_data_for(
+        message_id: &str,
+        sender: &IdentityId,
+        recipient: &IdentityId,
+        created_at_ms: u64,
+    ) -> Vec<u8> {
+        message_associated_data(message_id, sender, recipient, created_at_ms)
+    }
+}
+
+impl MessageEnvelope {
     pub fn new(
         message_id: impl Into<String>,
         sender: IdentityId,
         recipient: IdentityId,
         payload: EncryptedPayload,
-        associated_data: Vec<u8>,
+        _associated_data: Vec<u8>,
     ) -> Result<Self, ModelError> {
         let message_id = message_id.into();
         sender.validate()?;
@@ -118,15 +143,16 @@ impl MessageEnvelope {
         if payload.nonce.len() != NONCE_LENGTH || payload.ciphertext.len() < 16 {
             return Err(ModelError::InvalidCiphertext);
         }
+        let created_at_ms = now_ms();
         Ok(Self {
             message_id,
             sender,
             recipient,
-            created_at_ms: now_ms(),
+            created_at_ms,
             protocol_version: PROTOCOL_VERSION,
             nonce: payload.nonce,
             ciphertext: payload.ciphertext,
-            associated_data,
+            associated_data: _associated_data,
         })
     }
 
@@ -138,7 +164,10 @@ impl MessageEnvelope {
         }
 
         validate_protocol_version(self.protocol_version)?;
-        if self.nonce.len() != NONCE_LENGTH || self.ciphertext.len() < 16 {
+        if self.nonce.len() != NONCE_LENGTH
+            || self.ciphertext.len() < 16
+            || self.associated_data.is_empty()
+        {
             return Err(ModelError::InvalidCiphertext);
         }
         Ok(())
@@ -174,6 +203,8 @@ pub enum ModelError {
     InvalidMessageId,
     #[error("message has an invalid nonce, protocol version, or ciphertext")]
     InvalidCiphertext,
+    #[error("message associated data does not match the envelope")]
+    InvalidAssociatedData,
     #[error("unsupported protocol version: {0}")]
     UnsupportedProtocolVersion(u16),
 }
@@ -226,11 +257,14 @@ impl IdentityKeypair {
 pub fn derive_shared_key(
     local_secret: &StaticSecret,
     remote_public: &[u8; KEY_LENGTH],
-) -> [u8; KEY_LENGTH] {
+) -> Result<[u8; KEY_LENGTH], CryptoError> {
     let remote_public = PublicKey::from(*remote_public);
     let shared = local_secret.diffie_hellman(&remote_public);
+    if shared.as_bytes().iter().all(|byte| *byte == 0) {
+        return Err(CryptoError::InvalidKey);
+    }
     let digest = Sha256::digest(shared.as_bytes());
-    digest.into()
+    Ok(digest.into())
 }
 
 pub fn encrypt(
@@ -279,7 +313,7 @@ pub fn encrypt_for(
     plaintext: &[u8],
     associated_data: &[u8],
 ) -> Result<EncryptedPayload, CryptoError> {
-    let key = derive_shared_key(sender.secret(), recipient_public);
+    let key = derive_shared_key(sender.secret(), recipient_public)?;
     encrypt(&key, plaintext, associated_data)
 }
 
@@ -289,7 +323,7 @@ pub fn decrypt_from(
     envelope: &MessageEnvelope,
 ) -> Result<Vec<u8>, CryptoError> {
     envelope.validate()?;
-    let key = derive_shared_key(recipient.secret(), sender_public);
+    let key = derive_shared_key(recipient.secret(), sender_public)?;
     decrypt(
         &key,
         &envelope.encrypted_payload(),
@@ -359,6 +393,33 @@ mod tests {
         assert!(matches!(
             envelope.validate(),
             Err(ModelError::UnsupportedProtocolVersion(_))
+        ));
+    }
+
+    #[test]
+    fn associated_data_binds_protocol_and_participants() {
+        let sender = IdentityId::new("alice").unwrap();
+        let recipient = IdentityId::new("bob").unwrap();
+        assert_eq!(
+            message_associated_data("message-1", &sender, &recipient, 123),
+            b"neonmonkey:v1:direct:message-1:alice:bob:123"
+        );
+        assert_ne!(
+            message_associated_data("message-1", &sender, &recipient, 123),
+            message_associated_data("message-2", &sender, &recipient, 123)
+        );
+        assert_ne!(
+            message_associated_data("message-1", &sender, &recipient, 123),
+            message_associated_data("message-1", &sender, &recipient, 124)
+        );
+    }
+
+    #[test]
+    fn low_order_public_keys_are_rejected() {
+        let alice = IdentityKeypair::generate();
+        assert!(matches!(
+            derive_shared_key(&alice.secret, &[0_u8; KEY_LENGTH]),
+            Err(CryptoError::InvalidKey)
         ));
     }
 }

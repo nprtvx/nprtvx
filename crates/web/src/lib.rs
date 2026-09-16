@@ -62,6 +62,7 @@ mod browser {
         me: Option<Identity>,
         peer: Option<Identity>,
         busy: bool,
+        older_before: Option<i64>,
     }
 
     fn document() -> Document {
@@ -296,13 +297,22 @@ mod browser {
 
     fn load_messages(app: Rc<RefCell<App>>) {
         let peer = app.borrow().peer.clone().unwrap();
+        text("chat-subtitle", "Loading messages…");
+        show("load-older-button", false);
         spawn_local(async move {
-            let result: Result<Vec<Message>, _> =
-                request("GET", &format!("/api/direct/{}", peer.account_id), None).await;
+            let result: Result<Vec<Message>, _> = request(
+                "GET",
+                &format!("/api/direct/{}?limit=100", encode_query(&peer.account_id)),
+                None,
+            )
+            .await;
             let messages = id("messages");
             messages.set_inner_html("");
             match result {
                 Ok(items) => {
+                    text("chat-subtitle", &format!("@{}", peer.username));
+                    show("load-older-button", items.len() == 100);
+                    app.borrow_mut().older_before = items.first().map(|item| item.created_at);
                     for item in items {
                         let mine =
                             app.borrow().me.as_ref().unwrap().account_id == item.sender_account_id;
@@ -325,7 +335,10 @@ mod browser {
                         messages.append_child(&row).unwrap();
                     }
                 }
-                Err(message) => error("recipient-error", &message),
+                Err(message) => {
+                    text("chat-subtitle", "Could not load messages");
+                    error("recipient-error", &message);
+                }
             }
         });
     }
@@ -430,6 +443,7 @@ mod browser {
         if value.trim().is_empty() {
             return;
         }
+
         let expiry = input("expiry-select")
             .value()
             .parse()
@@ -439,7 +453,7 @@ mod browser {
         spawn_local(async move {
             let result: Result<Message, _> = request(
                 "POST",
-                &format!("/api/direct/{}", peer.account_id),
+                &format!("/api/direct/{}", encode_query(&peer.account_id)),
                 Some(json(&MessageRequest {
                     protocol_version: 1,
                     message_id: uuid(&random_bytes(16)),
@@ -452,6 +466,35 @@ mod browser {
             match result {
                 Ok(_) => load_messages(app),
                 Err(message) => error("recipient-error", &message),
+            }
+        });
+    }
+
+    fn load_older_messages(app: Rc<RefCell<App>>) {
+        let peer = app.borrow().peer.clone().unwrap();
+        let Some(before) = app.borrow().older_before else {
+            return;
+        };
+        spawn_local(async move {
+            let result: Result<Vec<Message>, _> = request(
+                "GET",
+                &format!(
+                    "/api/direct/{}?limit=100&before={before}",
+                    encode_query(&peer.account_id)
+                ),
+                None,
+            )
+            .await;
+            if let Ok(items) = result {
+                app.borrow_mut().older_before = items.first().map(|item| item.created_at);
+                show("load-older-button", items.len() == 100);
+                let messages = id("messages");
+                for item in items.into_iter().rev() {
+                    let row = document().create_element("div").unwrap();
+                    row.set_class_name("message-row");
+                    row.set_text_content(Some(&decode_text(&item.ciphertext)));
+                    messages.prepend_with_node_1(&row).unwrap();
+                }
             }
         });
     }
@@ -537,7 +580,7 @@ mod browser {
             move |event| {
                 event.prevent_default();
                 let query = input("recipient-input").value();
-                let app = app.clone();
+                let app_for_request = app.clone();
                 spawn_local(async move {
                     match request::<Identity>(
                         "GET",
@@ -548,12 +591,16 @@ mod browser {
                     {
                         Ok(peer) => {
                             error("recipient-error", "");
-                            open_chat(app, peer);
+                            open_chat(app_for_request, peer);
                         }
                         Err(message) => error("recipient-error", &message),
                     }
                 });
             }
+        });
+        bind_click("load-older-button", {
+            let app = app.clone();
+            move |_| load_older_messages(app.clone())
         });
         show("auth-form-panel", false);
         show("app-shell", false);
