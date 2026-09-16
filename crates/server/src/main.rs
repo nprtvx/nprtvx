@@ -581,6 +581,48 @@ async fn list_messages(
     let recipient = recipient.to_lowercase();
     validate_account_id(&recipient)?;
     let limit = query.limit.unwrap_or(100).clamp(1, 100);
+    if let Some(pool) = &state.database {
+        let rows = sqlx::query(
+            "SELECT trim(sender_account_id) sender, trim(recipient_account_id) recipient,
+                    message_id::text message_id, ciphertext->>'iv' iv,
+                    ciphertext->>'ciphertext' ciphertext,
+                    (extract(epoch from created_at) * 1000)::bigint created_at,
+                    CASE WHEN expires_at IS NULL THEN NULL
+                         ELSE (extract(epoch from expires_at) * 1000)::bigint END expires_at
+             FROM encrypted_messages
+             WHERE (expires_at IS NULL OR expires_at > CURRENT_TIMESTAMP)
+               AND ((trim(sender_account_id) = $1 AND trim(recipient_account_id) = $2)
+                    OR (trim(sender_account_id) = $2 AND trim(recipient_account_id) = $1))
+               AND ($3::bigint IS NULL
+                    OR (extract(epoch from created_at) * 1000)::bigint < $3)
+             ORDER BY created_at DESC
+             LIMIT $4",
+        )
+        .bind(&current)
+        .bind(&recipient)
+        .bind(query.before)
+        .bind(limit as i64)
+        .fetch_all(pool)
+        .await
+        .map_err(ApiError::database)?;
+        let mut messages = rows
+            .into_iter()
+            .map(|row| {
+                Ok(Message {
+                    message_id: row.try_get("message_id")?,
+                    sender_account_id: row.try_get("sender")?,
+                    recipient_account_id: row.try_get("recipient")?,
+                    iv: row.try_get("iv")?,
+                    ciphertext: row.try_get("ciphertext")?,
+                    created_at: row.try_get("created_at")?,
+                    expires_at: row.try_get("expires_at")?,
+                })
+            })
+            .collect::<Result<Vec<_>, sqlx::Error>>()
+            .map_err(ApiError::database)?;
+        messages.reverse();
+        return Ok(Json(messages));
+    }
     let mut messages: Vec<_> = state
         .messages
         .read()
