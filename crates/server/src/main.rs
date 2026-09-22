@@ -361,8 +361,13 @@ async fn security_headers(request: axum::http::Request<Body>, next: Next) -> Res
     );
     headers.insert(
         header::CONTENT_SECURITY_POLICY,
-        HeaderValue::from_static("default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; connect-src 'self'; frame-ancestors 'none'"),
+        HeaderValue::from_static("default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; connect-src 'self'; frame-ancestors 'none'; object-src 'none'; base-uri 'self'"),
     );
+    headers.insert(
+        header::STRICT_TRANSPORT_SECURITY,
+        HeaderValue::from_static("max-age=31536000; includeSubDomains"),
+    );
+    headers.insert(header::X_XSS_PROTECTION, HeaderValue::from_static("0"));
     if api_request {
         headers.insert(header::CACHE_CONTROL, HeaderValue::from_static("no-store"));
         headers.insert(header::PRAGMA, HeaderValue::from_static("no-cache"));
@@ -430,7 +435,7 @@ async fn register(
         .await
         .insert(identity.account_id.clone(), identity.clone());
     let token = create_session(&state, &identity.account_id).await?;
-    Ok((cookie_header(token), Json(identity)))
+    Ok((cookie_header(&headers, token), Json(identity)))
 }
 
 async fn login(
@@ -458,7 +463,7 @@ async fn login(
     }
     state.auth_failures.write().await.remove(&identity.username);
     let token = create_session(&state, &identity.account_id).await?;
-    Ok((cookie_header(token), Json(identity)))
+    Ok((cookie_header(&headers, token), Json(identity)))
 }
 
 async fn current_identity(
@@ -952,13 +957,32 @@ fn validate_request_origin(headers: &HeaderMap) -> Result<(), ApiError> {
     let origin = origin
         .to_str()
         .map_err(|_| ApiError::new(StatusCode::FORBIDDEN, "Invalid request origin"))?;
-    let host = headers
-        .get(header::HOST)
+    let forwarded_host = headers
+        .get("x-forwarded-host")
         .and_then(|value| value.to_str().ok())
+        .map(str::trim)
+        .filter(|value| !value.is_empty());
+    let host = forwarded_host
+        .or_else(|| {
+            headers
+                .get(header::HOST)
+                .and_then(|value| value.to_str().ok())
+        })
+        .map(str::trim)
+        .filter(|value| !value.is_empty())
         .ok_or_else(|| ApiError::new(StatusCode::FORBIDDEN, "Missing request host"))?;
-    let expected = format!("http://{host}");
-    let expected_tls = format!("https://{host}");
-    if origin != expected && origin != expected_tls {
+    let forwarded_proto = headers
+        .get("x-forwarded-proto")
+        .and_then(|value| value.to_str().ok())
+        .map(str::trim)
+        .filter(|value| !value.is_empty())
+        .unwrap_or("http");
+    let expected = [
+        format!("http://{host}"),
+        format!("https://{host}"),
+        format!("{forwarded_proto}://{host}"),
+    ];
+    if !expected.iter().any(|candidate| *candidate == origin) {
         return Err(ApiError::new(
             StatusCode::FORBIDDEN,
             "Cross-origin state changes are not allowed",
@@ -967,20 +991,27 @@ fn validate_request_origin(headers: &HeaderMap) -> Result<(), ApiError> {
     Ok(())
 }
 
-fn cookie_header(token: String) -> HeaderMap {
-    let mut headers = HeaderMap::new();
+fn cookie_header(headers: &HeaderMap, token: String) -> HeaderMap {
+    let mut response_headers = HeaderMap::new();
     let secure = env::var("NEONMONKEY_COOKIE_SECURE")
         .map(|value| value != "false")
-        .unwrap_or(false);
+        .unwrap_or_else(|_| {
+            headers
+                .get("x-forwarded-proto")
+                .and_then(|value| value.to_str().ok())
+                .map(str::trim)
+                .filter(|value| !value.is_empty())
+                .is_some_and(|value| value.eq_ignore_ascii_case("https"))
+        });
     let secure_attribute = if secure { "; Secure" } else { "" };
-    headers.insert(
+    response_headers.insert(
         header::SET_COOKIE,
         HeaderValue::from_str(&format!(
-            "{SESSION_COOKIE}={token}; Max-Age=2592000; Path=/; HttpOnly{secure_attribute}; SameSite=Lax"
+            "{SESSION_COOKIE}={token}; Max-Age=2592000; Path=/; HttpOnly; SameSite=Lax{secure_attribute}"
         ))
         .expect("session cookie is a valid header"),
     );
-    headers
+    response_headers
 }
 
 fn public_identity(identity: &Identity) -> serde_json::Value {
@@ -1040,7 +1071,7 @@ async fn load_identity(
 }
 
 fn validate_registration(request: &RegisterRequest) -> Result<(), ApiError> {
-    let username = request.username.trim();
+    let username = request.username.trim().to_ascii_lowercase();
     if request.protocol_version != neonmonkey_core::PROTOCOL_VERSION
         || validate_account_id(request.account_id.trim()).is_err()
         || !(3..=24).contains(&username.len())
@@ -1349,6 +1380,20 @@ mod tests {
     }
 
     #[test]
+    fn registration_normalizes_uppercase_usernames_before_validation() {
+        let request = RegisterRequest {
+            protocol_version: 1,
+            account_id: "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa".into(),
+            username: "Alice_42".into(),
+            password: "correct horse battery staple".into(),
+            display_name: "Alice".into(),
+            public_key: "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=".into(),
+            recovery_bundle: "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=".into(),
+        };
+        assert!(validate_registration(&request).is_ok());
+    }
+
+    #[test]
     fn serialized_identity_does_not_expose_recovery_bundle() {
         let identity = Identity {
             account_id: "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa".into(),
@@ -1651,7 +1696,9 @@ mod tests {
 
     #[test]
     fn cookie_header_is_http_local_by_default() {
-        let cookie = cookie_header("token".into())
+        let mut headers = HeaderMap::new();
+        headers.insert(header::HOST, HeaderValue::from_static("localhost"));
+        let cookie = cookie_header(&headers, "token".into())
             .get(header::SET_COOKIE)
             .unwrap()
             .to_str()
@@ -1660,5 +1707,26 @@ mod tests {
         assert!(cookie.contains("HttpOnly"));
         assert!(cookie.contains("SameSite=Lax"));
         assert!(!cookie.contains("Secure"));
+    }
+
+    #[test]
+    fn forwarded_https_requests_are_allowed_and_cookie_is_secure() {
+        let mut headers = HeaderMap::new();
+        headers.insert(header::HOST, HeaderValue::from_static("example.com"));
+        headers.insert("x-forwarded-proto", HeaderValue::from_static("https"));
+        headers.insert("x-forwarded-host", HeaderValue::from_static("example.com"));
+        headers.insert(
+            header::ORIGIN,
+            HeaderValue::from_static("https://example.com"),
+        );
+        assert!(validate_request_origin(&headers).is_ok());
+
+        let cookie = cookie_header(&headers, "token".into())
+            .get(header::SET_COOKIE)
+            .unwrap()
+            .to_str()
+            .unwrap()
+            .to_string();
+        assert!(cookie.contains("Secure"));
     }
 }
