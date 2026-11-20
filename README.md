@@ -6,7 +6,7 @@ NeonMonkey is a Rust-first private messenger foundation built around **OpenMLS**
 
 ## Architecture
 
-- `crates/mls` — real OpenMLS identity, KeyPackage, group, application-message, add-member, and Welcome primitives
+- `crates/mls` — OpenMLS identity, KeyPackage, group, application-message, add-member, and Welcome primitives
 - `crates/server` — Axum relay and PostgreSQL-backed delivery service
 - `crates/web` — Rust/WASM cross-platform web client
 - `crates/client` — SQLite state and API abstractions shared by native clients
@@ -16,7 +16,7 @@ NeonMonkey is a Rust-first private messenger foundation built around **OpenMLS**
 Server-side storage:
 
 - PostgreSQL is the production relay database.
-- SQLite is for client state and local MLS state. It is not used as the network authority.
+- SQLite is for client state and local data; it is not the network authority.
 
 ## Technology
 
@@ -25,26 +25,30 @@ Server-side storage:
 - OpenMLS Rust crypto provider
 - Axum/Tokio
 - SQLx + PostgreSQL
-- sqlx-sqlite + SQLite
+- SQLx + SQLite
 - WebAssembly for the browser client
 
 ## Run locally
 
+Start the server and PostgreSQL together:
+
 ```bash
-rustup update
+docker compose up --build
+```
+
+The relay is available at `http://localhost:8090`; PostgreSQL is exposed on `localhost:5432` for local administration. The Compose volume preserves database contents across container restarts.
+
+For Rust checks:
+
+```bash
+cargo fmt --all -- --check
 cargo test --workspace
-cargo run -p airms-server
+cargo check --workspace
 ```
 
-Open `http://localhost:8090`.
+## PostgreSQL deployment
 
-## PostgreSQL
-
-Set `DATABASE_URL` to enable PostgreSQL. Without it, the server uses an in-memory relay suitable only for development.
-
-```bash
-DATABASE_URL=postgres://user:password@localhost/airms cargo run -p airms-server
-```
+Render provisions a persistent PostgreSQL database using the `basic-256mb` plan and injects its connection string as `DATABASE_URL`. The relay requires this setting and fails startup with a clear error if it is missing or cannot connect; it will not silently switch to ephemeral in-memory storage.
 
 ## Security status
 

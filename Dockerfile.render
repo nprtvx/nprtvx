@@ -1,7 +1,6 @@
 FROM rust:1.94
 WORKDIR /app
 COPY . .
-# Cargo.lock needs to be regenerated for the current workspace package graph.
-RUN cargo build --release -p airms-server
+RUN cargo build --release -p neonmonkey-server
 EXPOSE 8090
-CMD ["./target/release/airms-server"]
+CMD ["./target/release/neonmonkey-server"]

@@ -8,13 +8,11 @@ use axum::{
 use base64::{engine::general_purpose::STANDARD, Engine};
 use serde::{Deserialize, Serialize};
 use sqlx::{postgres::PgPoolOptions, PgPool, Row};
-use std::{collections::HashMap, env, sync::Arc};
-use tokio::sync::RwLock;
+use std::{collections::HashMap, env};
 
 #[derive(Clone)]
 struct StateStore {
-    postgres: Option<PgPool>,
-    memory: Arc<RwLock<HashMap<String, Vec<RelayEnvelope>>>>,
+    postgres: PgPool,
 }
 
 #[derive(Clone, Debug, Deserialize, Serialize)]
@@ -47,31 +45,24 @@ mod base64_bytes {
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
-    let postgres = match env::var("DATABASE_URL") {
-        Ok(url) => {
-            let pool = PgPoolOptions::new()
-                .max_connections(10)
-                .connect(&url)
-                .await?;
-            sqlx::query(
-                "CREATE TABLE IF NOT EXISTS relay_messages (
-                    message_id TEXT PRIMARY KEY,
-                    group_id TEXT NOT NULL,
-                    mls_message BYTEA NOT NULL,
-                    created_at TIMESTAMPTZ NOT NULL DEFAULT now()
-                 )",
-            )
-            .execute(&pool)
-            .await?;
-            Some(pool)
-        }
-        Err(_) => None,
-    };
+    let database_url = env::var("DATABASE_URL")
+        .map_err(|_| "DATABASE_URL is required; configure PostgreSQL before starting NeonMonkey")?;
+    let postgres = PgPoolOptions::new()
+        .max_connections(10)
+        .connect(&database_url)
+        .await?;
+    sqlx::query(
+        "CREATE TABLE IF NOT EXISTS relay_messages (
+            message_id TEXT PRIMARY KEY,
+            group_id TEXT NOT NULL,
+            mls_message BYTEA NOT NULL,
+            created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+         )",
+    )
+    .execute(&postgres)
+    .await?;
 
-    let state = StateStore {
-        postgres,
-        memory: Arc::new(RwLock::new(HashMap::new())),
-    };
+    let state = StateStore { postgres };
     let app = Router::new()
         .route("/health", get(health))
         .route("/api/v1/messages", post(deliver).get(messages))
@@ -81,7 +72,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let port = env::var("PORT").unwrap_or_else(|_| "8090".to_string());
     let address = format!("0.0.0.0:{port}");
     let listener = tokio::net::TcpListener::bind(&address).await?;
-    println!("NeonMonkey relay listening on {address}");
+    println!("NeonMonkey relay listening on {address} with PostgreSQL storage");
     axum::serve(listener, app).await?;
     Ok(())
 }
@@ -105,36 +96,24 @@ async fn deliver(State(state): State<StateStore>, Json(envelope): Json<RelayEnve
             .into_response();
     }
 
-    if let Some(pool) = &state.postgres {
-        let result = sqlx::query(
-            "INSERT INTO relay_messages(message_id, group_id, mls_message)
-             VALUES ($1, $2, $3)
-             ON CONFLICT (message_id) DO NOTHING",
+    match sqlx::query(
+        "INSERT INTO relay_messages(message_id, group_id, mls_message)
+         VALUES ($1, $2, $3)
+         ON CONFLICT (message_id) DO NOTHING",
+    )
+    .bind(&envelope.message_id)
+    .bind(&envelope.group_id)
+    .bind(&envelope.mls_message)
+    .execute(&state.postgres)
+    .await
+    {
+        Ok(_) => StatusCode::ACCEPTED.into_response(),
+        Err(error) => (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            Json(serde_json::json!({"error":error.to_string()})),
         )
-        .bind(&envelope.message_id)
-        .bind(&envelope.group_id)
-        .bind(&envelope.mls_message)
-        .execute(pool)
-        .await;
-
-        if let Err(error) = result {
-            return (
-                StatusCode::INTERNAL_SERVER_ERROR,
-                Json(serde_json::json!({"error":error.to_string()})),
-            )
-                .into_response();
-        }
-    } else {
-        state
-            .memory
-            .write()
-            .await
-            .entry(envelope.group_id.clone())
-            .or_default()
-            .push(envelope);
+            .into_response(),
     }
-
-    StatusCode::ACCEPTED.into_response()
 }
 
 async fn messages(
@@ -149,42 +128,31 @@ async fn messages(
             .into_response();
     };
 
-    if let Some(pool) = &state.postgres {
-        match sqlx::query(
-            "SELECT message_id, group_id, mls_message
-             FROM relay_messages
-             WHERE group_id=$1
-             ORDER BY created_at",
-        )
-        .bind(group_id)
-        .fetch_all(pool)
-        .await
-        {
-            Ok(rows) => {
-                let messages = rows
-                    .into_iter()
-                    .map(|row| RelayEnvelope {
-                        message_id: row.try_get("message_id").unwrap_or_default(),
-                        group_id: row.try_get("group_id").unwrap_or_default(),
-                        mls_message: row.try_get("mls_message").unwrap_or_default(),
-                    })
-                    .collect::<Vec<_>>();
-                Json(messages).into_response()
-            }
-            Err(error) => (
-                StatusCode::INTERNAL_SERVER_ERROR,
-                Json(serde_json::json!({"error":error.to_string()})),
-            )
-                .into_response(),
+    match sqlx::query(
+        "SELECT message_id, group_id, mls_message
+         FROM relay_messages
+         WHERE group_id=$1
+         ORDER BY created_at",
+    )
+    .bind(group_id)
+    .fetch_all(&state.postgres)
+    .await
+    {
+        Ok(rows) => {
+            let messages = rows
+                .into_iter()
+                .map(|row| RelayEnvelope {
+                    message_id: row.try_get("message_id").unwrap_or_default(),
+                    group_id: row.try_get("group_id").unwrap_or_default(),
+                    mls_message: row.try_get("mls_message").unwrap_or_default(),
+                })
+                .collect::<Vec<_>>();
+            Json(messages).into_response()
         }
-    } else {
-        let messages = state
-            .memory
-            .read()
-            .await
-            .get(group_id)
-            .cloned()
-            .unwrap_or_default();
-        Json(messages).into_response()
+        Err(error) => (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            Json(serde_json::json!({"error":error.to_string()})),
+        )
+            .into_response(),
     }
 }

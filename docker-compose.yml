@@ -2,15 +2,15 @@ services:
   postgres:
     image: postgres:17-alpine
     environment:
-      POSTGRES_DB: airms
-      POSTGRES_USER: airms
-      POSTGRES_PASSWORD: airms
+      POSTGRES_DB: neonmonkey
+      POSTGRES_USER: neonmonkey
+      POSTGRES_PASSWORD: neonmonkey
     ports:
       - "5432:5432"
     volumes:
-      - airms-postgres:/var/lib/postgresql/data
+      - neonmonkey-postgres:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U airms"]
+      test: ["CMD-SHELL", "pg_isready -U neonmonkey -d neonmonkey"]
       interval: 5s
       timeout: 5s
       retries: 10
@@ -18,7 +18,7 @@ services:
   server:
     build: .
     environment:
-      DATABASE_URL: postgres://airms:airms@postgres:5432/airms
+      DATABASE_URL: postgres://neonmonkey:neonmonkey@postgres:5432/neonmonkey
       PORT: 8090
     ports:
       - "8090:8090"
@@ -27,4 +27,4 @@ services:
         condition: service_healthy
 
 volumes:
-  airms-postgres:
+  neonmonkey-postgres:

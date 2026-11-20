@@ -1,5 +1,5 @@
 [package]
-name = "airms-core"
+name = "neonmonkey-mls"
 version.workspace = true
 edition.workspace = true
 license.workspace = true
@@ -14,5 +14,3 @@ tls_codec = { version = "0.5", features = ["derive", "serde", "mls"] }
 serde.workspace = true
 serde_json.workspace = true
 thiserror.workspace = true
-
-[dev-dependencies]

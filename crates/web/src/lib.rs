@@ -1,4 +1,4 @@
-//! Rust/WASM browser shell. Native clients can reuse `airms-core` and `airms-client`.
+//! Rust/WASM browser shell. Native clients can reuse `neonmonkey-mls` and `neonmonkey-client`.
 
 #[cfg(target_arch = "wasm32")]
 mod wasm {

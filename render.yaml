@@ -19,6 +19,6 @@ services:
 
 databases:
   - name: neonmonkey-db
-    plan: free
+    plan: basic-256mb
     databaseName: neonmonkey
     user: neonmonkey
