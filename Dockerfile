@@ -1,7 +1,8 @@
 FROM rust:1.94 AS builder
 WORKDIR /app
 COPY . .
-RUN cargo build --release --locked -p airms-server
+# Cargo.lock needs to be regenerated for the current workspace package graph.
+RUN cargo build --release -p airms-server
 
 FROM debian:bookworm-slim
 RUN apt-get update \

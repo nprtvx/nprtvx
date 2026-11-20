@@ -1,4 +1,4 @@
-//! Real MLS primitives for AirMS.
+//! Real MLS primitives for NeonMonkey.
 //!
 //! The relay must never decrypt, inspect, modify, or invent MLS messages.
 
@@ -57,12 +57,12 @@ impl Identity {
 pub fn create_group(identity: &Identity, group_id: &[u8]) -> Result<MlsGroup, String> {
     let config = MlsGroupCreateConfig::builder()
         .ciphersuite(CIPHERSUITE)
-        .with_group_id(GroupId::from_slice(group_id))
         .build();
-    MlsGroup::new(
+    MlsGroup::new_with_group_id(
         &identity.provider,
         &identity.signer,
         &config,
+        GroupId::from_slice(group_id),
         identity.credential.clone(),
     )
     .map_err(|error| error.to_string())
@@ -85,6 +85,14 @@ pub fn parse_message(bytes: &[u8]) -> Result<MlsMessageIn, String> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn create_group_uses_the_requested_group_id() {
+        let identity = Identity::create("alice").unwrap();
+        let group = create_group(&identity, b"neonmonkey-test-group").unwrap();
+
+        assert_eq!(group.group_id().as_slice(), b"neonmonkey-test-group");
+    }
 
     #[test]
     fn alice_and_bob_can_exchange_application_messages() {

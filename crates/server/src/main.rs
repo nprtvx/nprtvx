@@ -81,7 +81,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let port = env::var("PORT").unwrap_or_else(|_| "8090".to_string());
     let address = format!("0.0.0.0:{port}");
     let listener = tokio::net::TcpListener::bind(&address).await?;
-    println!("AirMS relay listening on {address}");
+    println!("NeonMonkey relay listening on {address}");
     axum::serve(listener, app).await?;
     Ok(())
 }

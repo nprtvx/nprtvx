@@ -11,7 +11,7 @@ mod wasm {
         let status = document
             .get_element_by_id("status")
             .ok_or("missing status")?;
-        status.set_text_content(Some("AirMS is ready — OpenMLS foundation loaded"));
+        status.set_text_content(Some("NeonMonkey is ready — OpenMLS foundation loaded"));
         Ok(())
     }
 }

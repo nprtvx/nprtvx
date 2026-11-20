@@ -1,6 +1,6 @@
-# AirMS
+# NeonMonkey
 
-AirMS is a Rust-first private messenger foundation built around **OpenMLS**.
+NeonMonkey is a Rust-first private messenger foundation built around **OpenMLS**.
 
 > This repository is an implementation in progress. Cryptography is provided by OpenMLS, not by a custom “envelope” implementation. Native iOS/Android/desktop packaging, authentication hardening, delivery receipts, and an independent security audit remain outside the initial foundation.
 
@@ -48,7 +48,7 @@ DATABASE_URL=postgres://user:password@localhost/airms cargo run -p airms-server
 
 ## Security status
 
-AirMS deliberately separates the following concerns:
+NeonMonkey deliberately separates the following concerns:
 
 1. MLS state and private keys remain on devices.
 2. The relay stores opaque MLS protocol messages and delivery metadata only.

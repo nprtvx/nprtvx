@@ -1,4 +1,4 @@
-# AirMS threat model
+# NeonMonkey threat model
 
 ## Trusted
 
