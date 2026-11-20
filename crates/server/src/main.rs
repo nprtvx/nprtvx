@@ -41,9 +41,7 @@ mod base64_bytes {
         D: Deserializer<'de>,
     {
         let value = String::deserialize(deserializer)?;
-        STANDARD
-            .decode(value)
-            .map_err(serde::de::Error::custom)
+        STANDARD.decode(value).map_err(serde::de::Error::custom)
     }
 }
 
@@ -95,10 +93,7 @@ async fn health() -> impl IntoResponse {
     )
 }
 
-async fn deliver(
-    State(state): State<StateStore>,
-    Json(envelope): Json<RelayEnvelope>,
-) -> Response {
+async fn deliver(State(state): State<StateStore>, Json(envelope): Json<RelayEnvelope>) -> Response {
     if envelope.message_id.is_empty()
         || envelope.group_id.is_empty()
         || envelope.mls_message.is_empty()
