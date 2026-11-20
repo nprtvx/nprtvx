@@ -25,7 +25,11 @@ impl Identity {
             credential: credential.into(),
             signature_key: signer.to_public_vec().into(),
         };
-        Ok(Self { provider, credential, signer })
+        Ok(Self {
+            provider,
+            credential,
+            signer,
+        })
     }
 
     pub fn key_package(&self) -> Result<KeyPackage, String> {
@@ -67,7 +71,9 @@ pub fn create_group(identity: &Identity, group_id: &[u8]) -> Result<MlsGroup, St
 pub fn serialize_message(message: &MlsMessageOut) -> Result<Vec<u8>, String> {
     use tls_codec::Serialize;
     let mut output = Vec::new();
-    message.tls_serialize(&mut output).map_err(|error| error.to_string())?;
+    message
+        .tls_serialize(&mut output)
+        .map_err(|error| error.to_string())?;
     Ok(output)
 }
 
@@ -117,7 +123,10 @@ mod tests {
             .create_message(&alice.provider, &alice.signer, b"hello")
             .unwrap();
         let processed = bob_group
-            .process_message(&bob.provider, message.into_protocol_message().unwrap())
+            .process_message(
+                &bob.provider,
+                message.into_protocol_message().unwrap(),
+            )
             .unwrap();
         match processed.into_content() {
             ProcessedMessageContent::ApplicationMessage(application) => {

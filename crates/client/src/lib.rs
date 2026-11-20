@@ -15,7 +15,9 @@ impl ClientStore {
             .max_connections(5)
             .connect(path)
             .await?;
-        sqlx::migrate!("../../migrations").run(&pool).await
+        sqlx::migrate!("../../migrations")
+            .run(&pool)
+            .await
             .map_err(|error| sqlx::Error::Migrate(Box::new(error)))?;
         Ok(Self { pool })
     }
