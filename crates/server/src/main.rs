@@ -49,7 +49,10 @@ mod base64_bytes {
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let postgres = match env::var("DATABASE_URL") {
         Ok(url) => {
-            let pool = PgPoolOptions::new().max_connections(10).connect(&url).await?;
+            let pool = PgPoolOptions::new()
+                .max_connections(10)
+                .connect(&url)
+                .await?;
             sqlx::query(
                 "CREATE TABLE IF NOT EXISTS relay_messages (
                     message_id TEXT PRIMARY KEY,
