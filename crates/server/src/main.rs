@@ -85,10 +85,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
 async fn health() -> impl IntoResponse {
     (
-        [(
-            header::CACHE_CONTROL,
-            HeaderValue::from_static("no-store"),
-        )],
+        [(header::CACHE_CONTROL, HeaderValue::from_static("no-store"))],
         Json(serde_json::json!({"status":"ok"})),
     )
 }

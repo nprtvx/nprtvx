@@ -123,10 +123,7 @@ mod tests {
             .create_message(&alice.provider, &alice.signer, b"hello")
             .unwrap();
         let processed = bob_group
-            .process_message(
-                &bob.provider,
-                message.into_protocol_message().unwrap(),
-            )
+            .process_message(&bob.provider, message.into_protocol_message().unwrap())
             .unwrap();
         match processed.into_content() {
             ProcessedMessageContent::ApplicationMessage(application) => {
