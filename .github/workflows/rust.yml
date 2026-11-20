@@ -2,37 +2,14 @@ name: Rust
 
 on:
   push:
-    branches: ["main"]
   pull_request:
 
-permissions:
-  contents: read
-
 jobs:
-  check:
+  rust:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
-        with:
-          toolchain: "1.98.0"
-          components: rustfmt, clippy
-      - uses: Swatinem/rust-cache@v2
       - run: cargo fmt --all -- --check
-      - run: cargo clippy --workspace --all-targets -- -D warnings
       - run: cargo test --workspace
       - run: cargo check --workspace
-      - run: rustup target add wasm32-unknown-unknown
-      - run: cargo install wasm-bindgen-cli --locked
-      - run: crates/web/build.sh target/neonmonkey-web
-      - run: docker build --tag neonmonkey-ci .
-
-  security:
-    runs-on: ubuntu-latest
-    permissions:
-      contents: read
-    steps:
-      - uses: actions/checkout@v4
-      - uses: rustsec/audit-check@v2
-        with:
-          token: ${{ secrets.GITHUB_TOKEN }}

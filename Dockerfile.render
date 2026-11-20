@@ -1,0 +1,6 @@
+FROM rust:1.94
+WORKDIR /app
+COPY . .
+RUN cargo build --release -p airms-server
+EXPOSE 8090
+CMD ["./target/release/airms-server"]

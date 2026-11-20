@@ -1,37 +1,30 @@
 services:
   postgres:
-    image: postgres:16-alpine
+    image: postgres:17-alpine
     environment:
-      POSTGRES_DB: ${POSTGRES_DB:-neonmonkey}
-      POSTGRES_USER: ${POSTGRES_USER:-neonmonkey}
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-neonmonkey_dev_password}
+      POSTGRES_DB: airms
+      POSTGRES_USER: airms
+      POSTGRES_PASSWORD: airms
+    ports:
+      - "5432:5432"
     volumes:
-      - neonmonkey-postgres:/var/lib/postgresql/data
+      - airms-postgres:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      test: ["CMD-SHELL", "pg_isready -U airms"]
       interval: 5s
       timeout: 5s
-      retries: 12
+      retries: 10
 
-  app:
-    build:
-      context: .
-      dockerfile: Dockerfile
+  server:
+    build: .
+    environment:
+      DATABASE_URL: postgres://airms:airms@postgres:5432/airms
+      PORT: 8090
+    ports:
+      - "8090:8090"
     depends_on:
       postgres:
         condition: service_healthy
-    healthcheck:
-      test: ["CMD", "wget", "--spider", "--quiet", "http://127.0.0.1:10000/health"]
-      interval: 10s
-      timeout: 5s
-      retries: 6
-      start_period: 10s
-    environment:
-      DATABASE_URL: postgres://${POSTGRES_USER:-neonmonkey}:${POSTGRES_PASSWORD:-neonmonkey_dev_password}@postgres:5432/${POSTGRES_DB:-neonmonkey}
-      PORT: "10000"
-      STATIC_DIR: /app/static
-    ports:
-      - "${APP_PORT:-8090}:10000"
 
 volumes:
-  neonmonkey-postgres:
+  airms-postgres:

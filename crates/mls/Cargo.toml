@@ -1,0 +1,18 @@
+[package]
+name = "airms-core"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+rust-version.workspace = true
+
+[dependencies]
+openmls = "0.9"
+openmls_basic_credential = "0.6"
+openmls_rust_crypto = "0.6"
+openmls_traits = "0.6"
+tls_codec = { version = "0.5", features = ["derive", "serde", "mls"] }
+serde.workspace = true
+serde_json.workspace = true
+thiserror.workspace = true
+
+[dev-dependencies]
