@@ -130,8 +130,10 @@ mod tests {
         let message = alice_group
             .create_message(&alice.provider, &alice.signer, b"hello")
             .unwrap();
+        let message_bytes = serialize_message(&message).unwrap();
+        let message = parse_message(&message_bytes).unwrap();
         let processed = bob_group
-            .process_message(&bob.provider, message.into_protocol_message().unwrap())
+            .process_message(&bob.provider, message)
             .unwrap();
         match processed.into_content() {
             ProcessedMessageContent::ApplicationMessage(application) => {
