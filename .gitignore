@@ -1,8 +1,12 @@
-# Rust build artifacts
+# Rust
 /target/
 Cargo.lock
 
-# Deployment data
+# Java / Maven
+/target/
+*.class
+
+# Deployment secrets and local databases
 .env
 *.db
 *.sqlite

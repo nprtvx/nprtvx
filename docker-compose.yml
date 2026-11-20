@@ -4,7 +4,7 @@ services:
     environment:
       POSTGRES_DB: neonmonkey
       POSTGRES_USER: neonmonkey
-      POSTGRES_PASSWORD: neonmonkey
+      POSTGRES_PASSWORD: ${DB_PASSWORD:-local-development-only}
     ports:
       - "5432:5432"
     volumes:
@@ -14,17 +14,17 @@ services:
       interval: 5s
       timeout: 5s
       retries: 10
-
   server:
     build: .
     environment:
-      DATABASE_URL: postgres://neonmonkey:neonmonkey@postgres:5432/neonmonkey
-      PORT: 8090
+      DATABASE_URL: jdbc:postgresql://postgres:5432/neonmonkey
+      DB_USER: neonmonkey
+      DB_PASSWORD: ${DB_PASSWORD:-local-development-only}
+      PORT: 8080
     ports:
-      - "8090:8090"
+      - "8080:8080"
     depends_on:
       postgres:
         condition: service_healthy
-
 volumes:
   neonmonkey-postgres:
